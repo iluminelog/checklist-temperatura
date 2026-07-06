@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>Check List de Temperatura · Câmaras Frias</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B141C;
+    --panel:#141F29;
+    --panel-alt:#1B2833;
+    --line:#26363F;
+    --text:#E8EEF2;
+    --muted:#7E93A0;
+    --congelado:#49C9E8;
+    --resfriado:#7FAEDB;
+    --seco:#C9A23B;
+    --ok:#4FCE8A;
+    --alerta:#E8604C;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(1200px 600px at 50% -10%, #182430 0%, var(--bg) 55%);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    min-height:100vh;
+    padding-bottom:40px;
+  }
+  .wrap{max-width:480px;margin:0 auto;padding:0 18px;}
+
+  header.top{
+    padding:22px 18px 14px;
+    display:flex;align-items:center;gap:12px;
+    border-bottom:1px solid var(--line);
+  }
+  .ice-mark{
+    width:38px;height:38px;border-radius:10px;
+    background:linear-gradient(155deg,#1B2833,#0F1A22);
+    border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;
+  }
+  .ice-mark svg{width:20px;height:20px;}
+  header.top h1{
+    font-family:'Barlow Condensed',sans-serif;
+    font-weight:700;font-size:19px;letter-spacing:.02em;
+    margin:0;line-height:1.15;
+  }
+  header.top span.sub{
+    display:block;font-family:'Inter';font-weight:500;font-size:11.5px;
+    color:var(--muted);letter-spacing:.03em;text-transform:uppercase;margin-top:2px;
+  }
+
+  .device-strip{
+    display:flex;align-items:center;justify-content:space-between;
+    margin:14px 0 0;padding:10px 14px;
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--muted);
+  }
+  .device-strip b{color:var(--text);font-weight:600;}
+  .device-strip button{
+    background:none;border:none;color:var(--congelado);font-family:'Inter';
+    font-size:12px;font-weight:600;cursor:pointer;padding:4px 6px;
+  }
+
+  section.card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:20px;
+    margin-top:16px;
+  }
+  .eyebrow{
+    font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12.5px;
+    letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
+    margin:0 0 12px;
+  }
+  label{
+    display:block;font-size:12.5px;color:var(--muted);margin:14px 0 6px;font-weight:500;
+  }
+  label:first-of-type{margin-top:0;}
+  select, input[type=text], input[type=number]{
+    width:100%;background:var(--panel-alt);border:1px solid var(--line);
+    color:var(--text);border-radius:10px;padding:12px 13px;font-size:15.5px;
+    font-family:'Inter';appearance:none;-webkit-appearance:none;
+  }
+  select:focus, input:focus{outline:2px solid var(--congelado);outline-offset:0;}
+  select{
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='9'><path d='M1 1l6 6 6-6' stroke='%237E93A0' stroke-width='1.6' fill='none' stroke-linecap='round'/></svg>");
+    background-repeat:no-repeat;background-position:right 14px center;padding-right:34px;
+  }
+
+  .faixa-box{
+    margin-top:14px;padding:12px 14px;border-radius:10px;
+    background:var(--panel-alt);border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;
+    font-family:'IBM Plex Mono',monospace;font-size:13px;
+  }
+  .faixa-box .tipo-tag{
+    font-family:'Barlow Condensed';font-weight:700;font-size:13px;
+    letter-spacing:.04em;text-transform:uppercase;padding:3px 9px;border-radius:6px;
+  }
+  .tag-congelado{background:rgba(73,201,232,.15);color:var(--congelado);}
+  .tag-resfriado{background:rgba(127,174,219,.15);color:var(--resfriado);}
+  .tag-seco{background:rgba(201,162,59,.18);color:var(--seco);}
+
+  .gauge-row{display:flex;align-items:center;gap:16px;margin-top:14px;}
+  .gauge{
+    width:84px;height:84px;border-radius:50%;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;
+    border:3px solid var(--line);position:relative;
+    transition:border-color .2s, box-shadow .2s;
+  }
+  .gauge .val{
+    font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:16.5px;
+  }
+  .gauge .deg{font-size:10px;vertical-align:top;}
+  .status-pill{
+    font-family:'Barlow Condensed';font-weight:700;font-size:13.5px;
+    letter-spacing:.05em;text-transform:uppercase;
+    padding:6px 12px;border-radius:20px;display:inline-block;
+  }
+  .status-ok{background:rgba(79,206,138,.15);color:var(--ok);}
+  .status-alerta{background:rgba(232,96,76,.16);color:var(--alerta);}
+  .status-neutro{background:var(--panel-alt);color:var(--muted);}
+  .status-sub{font-size:11.5px;color:var(--muted);margin-top:5px;}
+
+  .photo-grid{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;}
+  .photo-thumb{
+    width:76px;height:76px;border-radius:9px;overflow:hidden;position:relative;
+    border:1px solid var(--line);
+  }
+  .photo-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+  .photo-thumb .rm{
+    position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;
+    background:rgba(11,20,28,.85);color:#fff;border:none;font-size:13px;line-height:1;
+    cursor:pointer;
+  }
+  .add-photo{
+    width:76px;height:76px;border-radius:9px;border:1.5px dashed var(--line);
+    background:none;color:var(--muted);display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:3px;font-size:10.5px;cursor:pointer;
+    font-family:'Inter';
+  }
+  .add-photo svg{width:20px;height:20px;}
+
+  .geo-line{
+    display:flex;align-items:center;gap:7px;margin-top:14px;font-size:12px;color:var(--muted);
+    font-family:'IBM Plex Mono',monospace;
+  }
+  .geo-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0;}
+  .geo-dot.on{background:var(--ok);box-shadow:0 0 0 3px rgba(79,206,138,.18);}
+
+  button.submit{
+    width:100%;margin-top:20px;padding:15px;border:none;border-radius:12px;
+    background:var(--congelado);color:#06212A;font-family:'Barlow Condensed';
+    font-weight:700;font-size:17px;letter-spacing:.03em;text-transform:uppercase;
+    cursor:pointer;transition:opacity .15s;
+  }
+  button.submit:disabled{opacity:.45;cursor:not-allowed;}
+  button.submit.sending{opacity:.65;}
+
+  .msg{font-size:12.5px;color:var(--alerta);margin-top:10px;display:none;}
+
+  /* Success screen */
+  .success-screen{display:none;text-align:center;padding:60px 18px 20px;}
+  .success-ring{
+    width:78px;height:78px;border-radius:50%;margin:0 auto 20px;
+    background:rgba(79,206,138,.12);border:2px solid var(--ok);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .success-screen h2{font-family:'Barlow Condensed';font-size:24px;margin:0 0 6px;}
+  .success-screen p{color:var(--muted);font-size:14px;margin:0 0 26px;}
+  .success-detail{
+    text-align:left;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;padding:16px 18px;font-family:'IBM Plex Mono',monospace;
+    font-size:12.5px;color:var(--muted);line-height:1.9;
+  }
+  .success-detail b{color:var(--text);}
+  button.novo{
+    width:100%;margin-top:20px;padding:14px;border-radius:12px;
+    background:var(--panel-alt);border:1px solid var(--line);color:var(--text);
+    font-family:'Barlow Condensed';font-weight:700;font-size:15.5px;
+    letter-spacing:.03em;text-transform:uppercase;cursor:pointer;
+  }
+
+  footer.hint{text-align:center;color:var(--muted);font-size:11px;margin-top:22px;padding:0 30px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="ice-mark">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2v20M4 6l16 12M20 6L4 18M2 12h20" stroke="#49C9E8" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div>
+      <h1>Check List de Temperatura</h1>
+      <span class="sub">Câmaras Frias · Zilog</span>
+    </div>
+  </header>
+
+  <div class="device-strip" id="deviceStrip">
+    <span>Dispositivo: <b id="deviceLabel">—</b></span>
+    <button id="btnTrocarDispositivo">alterar</button>
+  </div>
+
+  <!-- FORM SCREEN -->
+  <div id="formScreen">
+    <section class="card">
+      <p class="eyebrow">Localização do registro</p>
+
+      <label for="unidade">Unidade (Filial)</label>
+      <select id="unidade"></select>
+
+      <label for="armazem">Armazém</label>
+      <select id="armazem"></select>
+
+      <label for="camara">Câmara</label>
+      <select id="camara"></select>
+
+      <div class="faixa-box" id="faixaBox" style="display:none;">
+        <span class="tipo-tag" id="tipoTag">—</span>
+        <span id="faixaTexto">—</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <p class="eyebrow">Temperatura</p>
+      <div class="gauge-row">
+        <div class="gauge" id="gauge">
+          <span class="val" id="gaugeVal">--<span class="deg">°C</span></span>
+        </div>
+        <div>
+          <span class="status-pill status-neutro" id="statusPill">Aguardando</span>
+          <div class="status-sub" id="statusSub">Selecione a câmara e informe a leitura</div>
+        </div>
+      </div>
+      <label for="temperatura">Informe a temperatura lida (°C)</label>
+      <input type="number" id="temperatura" step="0.1" inputmode="decimal" placeholder="Ex: -18.2">
+    </section>
+
+    <section class="card">
+      <p class="eyebrow">Fotos do painel / termômetro</p>
+      <div class="photo-grid" id="photoGrid">
+        <button type="button" class="add-photo" id="addPhotoBtn">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M4 8a2 2 0 012-2h1l1.2-1.6A2 2 0 0110 3.6h4a2 2 0 011.8.8L17 6h1a2 2 0 012 2v10a2 2 0 01-2 2H6a2 2 0 01-2-2V8z" stroke="#7E93A0" stroke-width="1.4"/><circle cx="12" cy="13" r="3.4" stroke="#7E93A0" stroke-width="1.4"/></svg>
+          Câmera
+        </button>
+      </div>
+      <input type="file" id="fileInput" accept="image/*" capture="environment" style="display:none;" multiple>
+
+      <div class="geo-line">
+        <span class="geo-dot" id="geoDot"></span>
+        <span id="geoTexto">Localização será capturada ao enviar</span>
+      </div>
+    </section>
+
+    <div class="msg" id="msgErro"></div>
+    <button class="submit" id="btnEnviar">Registrar Check List</button>
+  </div>
+
+  <!-- SUCCESS SCREEN -->
+  <div class="success-screen" id="successScreen">
+    <div class="success-ring">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M4 12l6 6L20 6" stroke="#4FCE8A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <h2>Registro salvo</h2>
+    <p>Os dados foram gravados na planilha e as fotos no Drive.</p>
+    <div class="success-detail" id="successDetail"></div>
+    <button class="novo" id="btnNovo">Novo Registro</button>
+  </div>
+
+  <footer class="hint">Data, hora e localização são registradas automaticamente no envio.</footer>
+</div>
+
+<script>
+/* =========================================================
+   CONFIGURAÇÃO — troque pela URL do seu App da Web (Apps Script)
+   ========================================================= */
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyHnZuExXmoXssYJagCXouzmPzUGwFp4v4d0NMzGbyDcm42rRoMxqx5iDBo4Q-K1j0/exec';
+
+// Config local de fallback (usada se a planilha ainda não responder / offline de config)
+const CONFIG_FALLBACK = [
+  { unidade: 'Aparecida de Goiânia GO (Zilog)', armazem: '1', camara: '1', tipo: 'Congelado' },
+  { unidade: 'Aparecida de Goiânia GO (Zilog)', armazem: '1', camara: '2', tipo: 'Congelado' },
+  { unidade: 'Aparecida de Goiânia GO (Zilog)', armazem: '1', camara: '3', tipo: 'Resfriado' },
+  { unidade: 'Aparecida de Goiânia GO (Zilog)', armazem: '1', camara: '4', tipo: 'Resfriado' },
+  { unidade: 'Aparecida de Goiânia GO (Zilog)', armazem: '1', camara: 'Antecâmara', tipo: 'Resfriado' }
+];
+
+const REGRAS_TIPO = {
+  'Congelado': { min: null, max: -12, regra: 'max', texto: '-12°C ou mais frio' },
+  'Resfriado': { min: 4, max: 8, regra: 'faixa', texto: 'entre 4°C e 8°C' },
+  'Seco':      { min: null, max: 15, regra: 'max', texto: '15°C ou mais frio' }
+};
+const TAG_CLASS = { 'Congelado': 'tag-congelado', 'Resfriado': 'tag-resfriado', 'Seco': 'tag-seco' };
+const RING_COLOR = { 'Congelado': '#49C9E8', 'Resfriado': '#7FAEDB', 'Seco': '#C9A23B' };
+
+let CONFIG = [];
+let fotos = []; // { base64, mimeType, dataUrl }
+let geo = { lat: null, lng: null, acc: null };
+
+/* ---------- Dispositivo ---------- */
+function getDeviceId(){ return localStorage.getItem('checklist_device_id'); }
+function setDeviceId(id){ localStorage.setItem('checklist_device_id', id); renderDevice(); }
+function renderDevice(){
+  const id = getDeviceId();
+  document.getElementById('deviceLabel').textContent = id || 'não definido';
+}
+document.getElementById('btnTrocarDispositivo').addEventListener('click', () => {
+  const atual = getDeviceId() || '';
+  const novo = prompt('ID do dispositivo (ex: nome do celular/coletor):', atual);
+  if (novo && novo.trim()) setDeviceId(novo.trim());
+});
+(function initDevice(){
+  if (!getDeviceId()){
+    const novo = prompt('Primeiro uso — informe o ID deste dispositivo (ex: "Celular Portaria 1"):', '');
+    setDeviceId(novo && novo.trim() ? novo.trim() : 'Dispositivo-' + Math.random().toString(36).slice(2,7));
+  } else {
+    renderDevice();
+  }
+})();
+
+/* ---------- Carregar config (Unidade/Armazém/Câmara/Tipo) ---------- */
+async function carregarConfig(){
+  try{
+    if (APPS_SCRIPT_URL.indexOf('COLE_AQUI') === -1){
+      const res = await fetch(APPS_SCRIPT_URL + '?action=config');
+      const data = await res.json();
+      if (data.ok && data.config && data.config.length) { CONFIG = data.config; return; }
+    }
+  }catch(e){ /* segue para fallback */ }
+  CONFIG = CONFIG_FALLBACK;
+}
+
+function unidades(){ return [...new Set(CONFIG.map(c => c.unidade))]; }
+function armazens(unidade){ return [...new Set(CONFIG.filter(c => c.unidade === unidade).map(c => c.armazem))]; }
+function camaras(unidade, armazem){ return CONFIG.filter(c => c.unidade === unidade && c.armazem === armazem); }
+
+function popular(select, opcoes){
+  select.innerHTML = opcoes.map(o => `<option value="${o}">${o}</option>`).join('');
+}
+
+function renderSelects(){
+  popular(document.getElementById('unidade'), unidades());
+  atualizarArmazens();
+}
+function atualizarArmazens(){
+  const u = document.getElementById('unidade').value;
+  popular(document.getElementById('armazem'), armazens(u));
+  atualizarCamaras();
+}
+function atualizarCamaras(){
+  const u = document.getElementById('unidade').value;
+  const a = document.getElementById('armazem').value;
+  const lista = camaras(u, a);
+  const sel = document.getElementById('camara');
+  sel.innerHTML = lista.map(c => `<option value="${c.camara}" data-tipo="${c.tipo}">Câmara ${c.camara}</option>`).join('');
+  atualizarFaixa();
+}
+function tipoAtual(){
+  const sel = document.getElementById('camara');
+  const opt = sel.options[sel.selectedIndex];
+  return opt ? opt.dataset.tipo : null;
+}
+function atualizarFaixa(){
+  const tipo = tipoAtual();
+  const box = document.getElementById('faixaBox');
+  if (!tipo){ box.style.display = 'none'; return; }
+  box.style.display = 'flex';
+  const tag = document.getElementById('tipoTag');
+  tag.textContent = tipo;
+  tag.className = 'tipo-tag ' + (TAG_CLASS[tipo] || '');
+  document.getElementById('faixaTexto').textContent = 'Ideal: ' + (REGRAS_TIPO[tipo] ? REGRAS_TIPO[tipo].texto : '—');
+  avaliarTemperatura();
+}
+
+document.getElementById('unidade').addEventListener('change', atualizarArmazens);
+document.getElementById('armazem').addEventListener('change', atualizarCamaras);
+document.getElementById('camara').addEventListener('change', atualizarFaixa);
+
+/* ---------- Avaliação da temperatura (gauge + status) ---------- */
+function avaliarStatus(tipo, temp){
+  const r = REGRAS_TIPO[tipo];
+  if (!r || temp === null || isNaN(temp)) return null;
+  if (r.regra === 'max') return temp <= r.max ? 'OK' : 'ALERTA';
+  return (temp >= r.min && temp <= r.max) ? 'OK' : 'ALERTA';
+}
+function avaliarTemperatura(){
+  const tipo = tipoAtual();
+  const input = document.getElementById('temperatura');
+  const temp = input.value === '' ? null : parseFloat(input.value.replace(',', '.'));
+  const gauge = document.getElementById('gauge');
+  const gaugeVal = document.getElementById('gaugeVal');
+  const pill = document.getElementById('statusPill');
+  const sub = document.getElementById('statusSub');
+
+  gaugeVal.innerHTML = (temp === null || isNaN(temp)) ? '--<span class="deg">°C</span>' : temp.toFixed(1) + '<span class="deg">°C</span>';
+
+  if (!tipo){
+    gauge.style.borderColor = '#26363F';
+    pill.className = 'status-pill status-neutro'; pill.textContent = 'Aguardando';
+    sub.textContent = 'Selecione a câmara e informe a leitura';
+    return;
+  }
+  const status = avaliarStatus(tipo, temp);
+  if (status === null){
+    gauge.style.borderColor = RING_COLOR[tipo] || '#26363F';
+    pill.className = 'status-pill status-neutro'; pill.textContent = 'Aguardando leitura';
+    sub.textContent = 'Ideal: ' + REGRAS_TIPO[tipo].texto;
+    return;
+  }
+  if (status === 'OK'){
+    gauge.style.borderColor = '#4FCE8A';
+    pill.className = 'status-pill status-ok'; pill.textContent = 'Dentro da faixa';
+  } else {
+    gauge.style.borderColor = '#E8604C';
+    pill.className = 'status-pill status-alerta'; pill.textContent = 'Fora da faixa';
+  }
+  sub.textContent = 'Ideal: ' + REGRAS_TIPO[tipo].texto;
+}
+document.getElementById('temperatura').addEventListener('input', avaliarTemperatura);
+
+/* ---------- Fotos ---------- */
+document.getElementById('addPhotoBtn').addEventListener('click', () => document.getElementById('fileInput').click());
+document.getElementById('fileInput').addEventListener('change', async (e) => {
+  const arquivos = Array.from(e.target.files || []);
+  for (const file of arquivos){
+    const comprimida = await comprimirImagem(file, 1280, 0.72);
+    fotos.push(comprimida);
+  }
+  e.target.value = '';
+  renderPhotoGrid();
+});
+
+function comprimirImagem(file, maxLado, qualidade){
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > height && width > maxLado){ height = height * (maxLado / width); width = maxLado; }
+        else if (height > maxLado){ width = width * (maxLado / height); height = maxLado; }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', qualidade);
+        resolve({ dataUrl, base64: dataUrl.split(',')[1], mimeType: 'image/jpeg' });
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderPhotoGrid(){
+  const grid = document.getElementById('photoGrid');
+  const addBtn = document.getElementById('addPhotoBtn');
+  grid.querySelectorAll('.photo-thumb').forEach(el => el.remove());
+  fotos.forEach((f, idx) => {
+    const div = document.createElement('div');
+    div.className = 'photo-thumb';
+    div.innerHTML = `<img src="${f.dataUrl}"><button type="button" class="rm" data-idx="${idx}">×</button>`;
+    grid.insertBefore(div, addBtn);
+  });
+  grid.querySelectorAll('.rm').forEach(btn => {
+    btn.addEventListener('click', () => {
+      fotos.splice(parseInt(btn.dataset.idx, 10), 1);
+      renderPhotoGrid();
+    });
+  });
+}
+
+/* ---------- Geolocalização ---------- */
+function capturarGeo(){
+  return new Promise((resolve) => {
+    if (!navigator.geolocation){ resolve(false); return; }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        geo = { lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy };
+        document.getElementById('geoDot').classList.add('on');
+        document.getElementById('geoTexto').textContent =
+          `Localização capturada (±${Math.round(pos.coords.accuracy)} m)`;
+        resolve(true);
+      },
+      () => {
+        document.getElementById('geoTexto').textContent = 'Não foi possível obter localização';
+        resolve(false);
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  });
+}
+
+/* ---------- Envio ---------- */
+document.getElementById('btnEnviar').addEventListener('click', async () => {
+  const msg = document.getElementById('msgErro');
+  msg.style.display = 'none';
+
+  const unidade = document.getElementById('unidade').value;
+  const armazem = document.getElementById('armazem').value;
+  const camara = document.getElementById('camara').value;
+  const tipo = tipoAtual();
+  const tempStr = document.getElementById('temperatura').value;
+
+  if (!unidade || !armazem || !camara){
+    msg.textContent = 'Selecione unidade, armazém e câmara.'; msg.style.display = 'block'; return;
+  }
+  if (tempStr === ''){
+    msg.textContent = 'Informe a temperatura lida.'; msg.style.display = 'block'; return;
+  }
+  if (fotos.length === 0){
+    msg.textContent = 'Tire pelo menos uma foto do painel/termômetro.'; msg.style.display = 'block'; return;
+  }
+  if (APPS_SCRIPT_URL.indexOf('COLE_AQUI') !== -1){
+    msg.textContent = 'Configuração pendente: cole a URL do App da Web no código (APPS_SCRIPT_URL).';
+    msg.style.display = 'block'; return;
+  }
+
+  const btn = document.getElementById('btnEnviar');
+  btn.disabled = true; btn.classList.add('sending'); btn.textContent = 'Enviando...';
+
+  await capturarGeo();
+
+  const temperatura = parseFloat(tempStr.replace(',', '.'));
+  const status = avaliarStatus(tipo, temperatura);
+
+  const payload = {
+    unidade, armazem, camara, tipo, temperatura,
+    dispositivoId: getDeviceId(),
+    latitude: geo.lat, longitude: geo.lng, precisaoGps: geo.acc,
+    fotos: fotos.map(f => ({ base64: f.base64, mimeType: f.mimeType }))
+  };
+
+  try{
+    const res = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.erro || 'Falha ao gravar');
+    mostrarSucesso({ unidade, armazem, camara, tipo, temperatura, status: data.status || status });
+  } catch (err){
+    msg.textContent = 'Erro ao enviar: ' + err.message;
+    msg.style.display = 'block';
+    btn.disabled = false; btn.classList.remove('sending'); btn.textContent = 'Registrar Check List';
+  }
+});
+
+function mostrarSucesso(d){
+  document.getElementById('formScreen').style.display = 'none';
+  document.getElementById('successScreen').style.display = 'block';
+  const agora = new Date();
+  document.getElementById('successDetail').innerHTML = `
+    <div><b>${agora.toLocaleString('pt-BR')}</b></div>
+    <div>Armazém ${d.armazem} · Câmara ${d.camara} (${d.tipo})</div>
+    <div>Temperatura: <b>${d.temperatura}°C</b> — ${d.status === 'OK' ? '✅ Dentro da faixa' : '⚠️ Fora da faixa'}</div>
+  `;
+}
+document.getElementById('btnNovo').addEventListener('click', () => {
+  document.getElementById('successScreen').style.display = 'none';
+  document.getElementById('formScreen').style.display = 'block';
+  document.getElementById('btnEnviar').disabled = false;
+  document.getElementById('btnEnviar').classList.remove('sending');
+  document.getElementById('btnEnviar').textContent = 'Registrar Check List';
+  document.getElementById('temperatura').value = '';
+  fotos = []; renderPhotoGrid();
+  document.getElementById('geoDot').classList.remove('on');
+  document.getElementById('geoTexto').textContent = 'Localização será capturada ao enviar';
+  avaliarTemperatura();
+});
+
+/* ---------- Boot ---------- */
+(async function init(){
+  await carregarConfig();
+  renderSelects();
+  renderPhotoGrid();
+})();
+</script>
+</body>
+</html>

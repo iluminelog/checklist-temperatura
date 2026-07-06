@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Indicadores · Check List de Temperatura</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0B141C; --panel:#141F29; --panel-alt:#1B2833; --line:#26363F;
+    --text:#E8EEF2; --muted:#7E93A0;
+    --congelado:#49C9E8; --resfriado:#7FAEDB; --seco:#C9A23B;
+    --ok:#4FCE8A; --alerta:#E8604C;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:radial-gradient(1400px 700px at 50% -12%, #182430 0%, var(--bg) 55%);
+    color:var(--text); font-family:'Inter',sans-serif; padding-bottom:60px;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:0 20px;}
+  header.top{padding:26px 0 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;border-bottom:1px solid var(--line);margin-bottom:22px;}
+  header.top h1{font-family:'Barlow Condensed';font-weight:700;font-size:24px;margin:0;}
+  header.top .sub{color:var(--muted);font-size:12.5px;text-transform:uppercase;letter-spacing:.04em;margin-top:3px;}
+
+  .filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+  .filters select, .filters input{
+    background:var(--panel-alt);border:1px solid var(--line);color:var(--text);
+    border-radius:9px;padding:9px 12px;font-size:13px;font-family:'Inter';
+  }
+  .btn-refresh{
+    background:var(--congelado);color:#06212A;border:none;border-radius:9px;
+    padding:9px 16px;font-family:'Barlow Condensed';font-weight:700;font-size:13.5px;
+    text-transform:uppercase;letter-spacing:.03em;cursor:pointer;
+  }
+
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:24px;}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px;}
+  .kpi .n{font-family:'IBM Plex Mono';font-weight:600;font-size:26px;}
+  .kpi .l{color:var(--muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;margin-top:4px;}
+  .kpi.ok .n{color:var(--ok);} .kpi.alerta .n{color:var(--alerta);}
+
+  .cam-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:16px;margin-bottom:26px;}
+  .cam-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;}
+  .cam-card .head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+  .cam-card h3{font-family:'Barlow Condensed';font-weight:700;font-size:17px;margin:0;}
+  .tipo-tag{font-family:'Barlow Condensed';font-weight:700;font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;padding:3px 9px;border-radius:6px;}
+  .tag-Congelado{background:rgba(73,201,232,.15);color:var(--congelado);}
+  .tag-Resfriado{background:rgba(127,174,219,.15);color:var(--resfriado);}
+  .tag-Seco{background:rgba(201,162,59,.18);color:var(--seco);}
+  .cam-card canvas{max-height:170px;}
+  .cam-card .stats{display:flex;gap:16px;margin-top:10px;font-family:'IBM Plex Mono';font-size:12px;color:var(--muted);}
+  .cam-card .stats b{color:var(--text);}
+
+  .alert-section h2, .table-section h2{font-family:'Barlow Condensed';font-weight:700;font-size:18px;margin:0 0 12px;}
+  table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;}
+  thead th{background:var(--panel-alt);color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;text-align:left;padding:10px 12px;font-weight:600;}
+  tbody td{padding:10px 12px;font-size:13px;border-top:1px solid var(--line);font-family:'IBM Plex Mono';}
+  tbody tr.alerta td{color:var(--alerta);}
+  tbody a{color:var(--congelado);text-decoration:none;}
+  .empty{color:var(--muted);font-size:13px;padding:20px;text-align:center;}
+  .status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;}
+  .status-dot.ok{background:var(--ok);} .status-dot.alerta{background:var(--alerta);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Indicadores de Temperatura</h1>
+      <div class="sub">Câmaras Frias · Zilog</div>
+    </div>
+    <div class="filters">
+      <select id="fUnidade"></select>
+      <select id="fArmazem"></select>
+      <input type="date" id="fInicio">
+      <input type="date" id="fFim">
+      <button class="btn-refresh" id="btnAtualizar">Atualizar</button>
+    </div>
+  </header>
+
+  <div class="kpis" id="kpis"></div>
+  <div class="cam-grid" id="camGrid"></div>
+
+  <div class="alert-section" style="margin-bottom:26px;">
+    <h2>Alertas (fora da faixa)</h2>
+    <div id="alertTableWrap"></div>
+  </div>
+
+  <div class="table-section">
+    <h2>Últimos registros</h2>
+    <div id="tableWrap"></div>
+  </div>
+</div>
+
+<script>
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyHnZuExXmoXssYJagCXouzmPzUGwFp4v4d0NMzGbyDcm42rRoMxqx5iDBo4Q-K1j0/exec';
+
+const REGRAS_TIPO = {
+  'Congelado': { texto: '≤ -12°C' },
+  'Resfriado': { texto: '4°C a 8°C' },
+  'Seco':      { texto: '≤ 15°C' }
+};
+const COR_TIPO = { 'Congelado': '#49C9E8', 'Resfriado': '#7FAEDB', 'Seco': '#C9A23B' };
+
+let REGISTROS = [];
+let charts = {};
+
+async function carregarDados(){
+  if (APPS_SCRIPT_URL.indexOf('COLE_AQUI') !== -1){
+    document.getElementById('camGrid').innerHTML =
+      '<div class="empty">Configuração pendente: cole a URL do App da Web no código (APPS_SCRIPT_URL).</div>';
+    return;
+  }
+  const res = await fetch(APPS_SCRIPT_URL + '?action=dados');
+  const data = await res.json();
+  REGISTROS = (data.registros || []).map(r => ({ ...r, temperatura: Number(r.temperatura) }));
+  popularFiltros();
+  renderTudo();
+}
+
+function popularFiltros(){
+  const unidades = [...new Set(REGISTROS.map(r => r.unidade))];
+  const fu = document.getElementById('fUnidade');
+  if (!fu.dataset.init){
+    fu.innerHTML = '<option value="">Todas unidades</option>' + unidades.map(u => `<option value="${u}">${u}</option>`).join('');
+    fu.dataset.init = '1';
+  }
+  atualizarArmazens();
+}
+function atualizarArmazens(){
+  const u = document.getElementById('fUnidade').value;
+  const armazens = [...new Set(REGISTROS.filter(r => !u || r.unidade === u).map(r => r.armazem))];
+  const fa = document.getElementById('fArmazem');
+  fa.innerHTML = '<option value="">Todos armazéns</option>' + armazens.map(a => `<option value="${a}">Armazém ${a}</option>`).join('');
+}
+document.getElementById('fUnidade').addEventListener('change', () => { atualizarArmazens(); renderTudo(); });
+document.getElementById('fArmazem').addEventListener('change', renderTudo);
+document.getElementById('fInicio').addEventListener('change', renderTudo);
+document.getElementById('fFim').addEventListener('change', renderTudo);
+document.getElementById('btnAtualizar').addEventListener('click', carregarDados);
+
+function registrosFiltrados(){
+  const u = document.getElementById('fUnidade').value;
+  const a = document.getElementById('fArmazem').value;
+  const ini = document.getElementById('fInicio').value ? new Date(document.getElementById('fInicio').value) : null;
+  const fim = document.getElementById('fFim').value ? new Date(document.getElementById('fFim').value + 'T23:59:59') : null;
+  return REGISTROS.filter(r => {
+    const d = new Date(r.dataHora);
+    if (u && r.unidade !== u) return false;
+    if (a && r.armazem !== a) return false;
+    if (ini && d < ini) return false;
+    if (fim && d > fim) return false;
+    return true;
+  }).sort((x, y) => new Date(x.dataHora) - new Date(y.dataHora));
+}
+
+function renderTudo(){
+  const regs = registrosFiltrados();
+  renderKpis(regs);
+  renderCamaras(regs);
+  renderAlertTable(regs);
+  renderTable(regs);
+}
+
+function renderKpis(regs){
+  const total = regs.length;
+  const alertas = regs.filter(r => r.status === 'ALERTA').length;
+  const ok = total - alertas;
+  const camaras = new Set(regs.map(r => r.unidade + '|' + r.armazem + '|' + r.camara)).size;
+  document.getElementById('kpis').innerHTML = `
+    <div class="kpi"><div class="n">${total}</div><div class="l">Registros</div></div>
+    <div class="kpi ok"><div class="n">${total ? Math.round(ok / total * 100) : 0}%</div><div class="l">Dentro da faixa</div></div>
+    <div class="kpi alerta"><div class="n">${alertas}</div><div class="l">Alertas</div></div>
+    <div class="kpi"><div class="n">${camaras}</div><div class="l">Câmaras monitoradas</div></div>
+  `;
+}
+
+function renderCamaras(regs){
+  const grid = document.getElementById('camGrid');
+  const chaves = [...new Set(regs.map(r => r.unidade + '|' + r.armazem + '|' + r.camara + '|' + r.tipo))];
+  Object.values(charts).forEach(c => c.destroy());
+  charts = {};
+
+  if (!chaves.length){
+    grid.innerHTML = '<div class="empty">Nenhum registro no período selecionado.</div>';
+    return;
+  }
+
+  grid.innerHTML = chaves.map((chave, idx) => {
+    const [unidade, armazem, camara, tipo] = chave.split('|');
+    return `
+      <div class="cam-card">
+        <div class="head">
+          <h3>Câmara ${camara}</h3>
+          <span class="tipo-tag tag-${tipo}">${tipo}</span>
+        </div>
+        <canvas id="chart-${idx}"></canvas>
+        <div class="stats" id="stats-${idx}"></div>
+      </div>`;
+  }).join('');
+
+  chaves.forEach((chave, idx) => {
+    const [unidade, armazem, camara, tipo] = chave.split('|');
+    const serie = regs.filter(r => r.unidade === unidade && r.armazem === armazem && r.camara === camara && r.tipo === tipo);
+    const labels = serie.map(r => new Date(r.dataHora).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' + new Date(r.dataHora).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
+    const valores = serie.map(r => r.temperatura);
+    const cores = serie.map(r => r.status === 'ALERTA' ? '#E8604C' : (COR_TIPO[tipo] || '#49C9E8'));
+
+    const ctx = document.getElementById(`chart-${idx}`);
+    charts[chave] = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          data: valores,
+          borderColor: COR_TIPO[tipo] || '#49C9E8',
+          backgroundColor: 'transparent',
+          pointBackgroundColor: cores,
+          pointRadius: 4,
+          tension: 0.25,
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: '#7E93A0', font: { size: 10 } }, grid: { color: '#1B2833' } },
+          y: { ticks: { color: '#7E93A0', font: { size: 10 } }, grid: { color: '#1B2833' } }
+        }
+      }
+    });
+
+    const media = valores.length ? (valores.reduce((a, b) => a + b, 0) / valores.length).toFixed(1) : '—';
+    const alertas = serie.filter(r => r.status === 'ALERTA').length;
+    document.getElementById(`stats-${idx}`).innerHTML =
+      `<span>Ideal: <b>${REGRAS_TIPO[tipo] ? REGRAS_TIPO[tipo].texto : '—'}</b></span>
+       <span>Média: <b>${media}°C</b></span>
+       <span>Alertas: <b style="color:${alertas ? '#E8604C' : '#7E93A0'}">${alertas}</b></span>`;
+  });
+}
+
+function renderAlertTable(regs){
+  const alertas = regs.filter(r => r.status === 'ALERTA').sort((a, b) => new Date(b.dataHora) - new Date(a.dataHora));
+  const wrap = document.getElementById('alertTableWrap');
+  if (!alertas.length){ wrap.innerHTML = '<div class="empty">Nenhum alerta no período selecionado.</div>'; return; }
+  wrap.innerHTML = `
+    <table><thead><tr>
+      <th>Data/Hora</th><th>Armazém</th><th>Câmara</th><th>Tipo</th><th>Temp.</th><th>Dispositivo</th><th>Foto</th>
+    </tr></thead><tbody>
+      ${alertas.map(r => `
+        <tr class="alerta">
+          <td>${new Date(r.dataHora).toLocaleString('pt-BR')}</td>
+          <td>${r.armazem}</td><td>${r.camara}</td><td>${r.tipo}</td>
+          <td>${r.temperatura}°C</td><td>${r.dispositivoId || '—'}</td>
+          <td>${r.fotos && r.fotos.length ? `<a href="${r.fotos[0]}" target="_blank">ver</a>` : '—'}</td>
+        </tr>`).join('')}
+    </tbody></table>`;
+}
+
+function renderTable(regs){
+  const wrap = document.getElementById('tableWrap');
+  const ultimos = [...regs].sort((a, b) => new Date(b.dataHora) - new Date(a.dataHora)).slice(0, 40);
+  if (!ultimos.length){ wrap.innerHTML = '<div class="empty">Nenhum registro encontrado.</div>'; return; }
+  wrap.innerHTML = `
+    <table><thead><tr>
+      <th>Status</th><th>Data/Hora</th><th>Armazém</th><th>Câmara</th><th>Tipo</th><th>Temp.</th><th>Dispositivo</th><th>Foto</th>
+    </tr></thead><tbody>
+      ${ultimos.map(r => `
+        <tr>
+          <td><span class="status-dot ${r.status === 'ALERTA' ? 'alerta' : 'ok'}"></span>${r.status}</td>
+          <td>${new Date(r.dataHora).toLocaleString('pt-BR')}</td>
+          <td>${r.armazem}</td><td>${r.camara}</td><td>${r.tipo}</td>
+          <td>${r.temperatura}°C</td><td>${r.dispositivoId || '—'}</td>
+          <td>${r.fotos && r.fotos.length ? `<a href="${r.fotos[0]}" target="_blank">ver</a>` : '—'}</td>
+        </tr>`).join('')}
+    </tbody></table>`;
+}
+
+carregarDados();
+</script>
+</body>
+</html>
