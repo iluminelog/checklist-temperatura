@@ -248,13 +248,14 @@ function renderAlertTable(regs){
   if (!alertas.length){ wrap.innerHTML = '<div class="empty">Nenhum alerta no período selecionado.</div>'; return; }
   wrap.innerHTML = `
     <table><thead><tr>
-      <th>Data/Hora</th><th>Armazém</th><th>Câmara</th><th>Tipo</th><th>Temp.</th><th>Dispositivo</th><th>Foto</th>
+      <th>ID</th><th>Data/Hora</th><th>Armazém</th><th>Câmara</th><th>Tipo</th><th>Temp.</th><th>Dispositivo</th><th>Foto</th>
     </tr></thead><tbody>
       ${alertas.map(r => `
         <tr class="alerta">
+          <td title="${r.idRegistro || ''}">${(r.idRegistro || '').slice(0, 8)}</td>
           <td>${new Date(r.dataHora).toLocaleString('pt-BR')}</td>
           <td>${r.armazem}</td><td>${r.camara}</td><td>${r.tipo}</td>
-          <td>${r.temperatura}°C</td><td>${r.dispositivoId || '—'}</td>
+          <td>${r.temperatura}°C</td><td>${r.dispositivoNome || '—'}</td>
           <td>${r.fotos && r.fotos.length ? `<a href="${r.fotos[0]}" target="_blank">ver</a>` : '—'}</td>
         </tr>`).join('')}
     </tbody></table>`;
@@ -266,14 +267,15 @@ function renderTable(regs){
   if (!ultimos.length){ wrap.innerHTML = '<div class="empty">Nenhum registro encontrado.</div>'; return; }
   wrap.innerHTML = `
     <table><thead><tr>
-      <th>Status</th><th>Data/Hora</th><th>Armazém</th><th>Câmara</th><th>Tipo</th><th>Temp.</th><th>Dispositivo</th><th>Foto</th>
+      <th>Status</th><th>ID</th><th>Data/Hora</th><th>Armazém</th><th>Câmara</th><th>Tipo</th><th>Temp.</th><th>Dispositivo</th><th>Foto</th>
     </tr></thead><tbody>
       ${ultimos.map(r => `
         <tr>
           <td><span class="status-dot ${r.status === 'ALERTA' ? 'alerta' : 'ok'}"></span>${r.status}</td>
+          <td title="${r.idRegistro || ''}">${(r.idRegistro || '').slice(0, 8)}</td>
           <td>${new Date(r.dataHora).toLocaleString('pt-BR')}</td>
           <td>${r.armazem}</td><td>${r.camara}</td><td>${r.tipo}</td>
-          <td>${r.temperatura}°C</td><td>${r.dispositivoId || '—'}</td>
+          <td>${r.temperatura}°C</td><td>${r.dispositivoNome || '—'}</td>
           <td>${r.fotos && r.fotos.length ? `<a href="${r.fotos[0]}" target="_blank">ver</a>` : '—'}</td>
         </tr>`).join('')}
     </tbody></table>`;
