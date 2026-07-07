@@ -365,11 +365,13 @@
   <div id="consultaScreen" style="display:none;">
     <section class="card">
       <p class="eyebrow">Buscar registro por ID</p>
-      <div class="busca-row">
-        <input type="text" id="buscaIdInput" placeholder="Cole o ID do registro">
-        <button id="btnBuscarRegistro">Buscar</button>
-      </div>
+      <label for="buscaIdInput">ID do registro</label>
+      <input type="text" id="buscaIdInput" placeholder="Ex: 0706001" inputmode="numeric">
+      <label for="buscaPinInput">PIN do dispositivo (só se pedir para desambiguar)</label>
+      <input type="text" id="buscaPinInput" placeholder="Opcional" inputmode="numeric">
+      <button class="submit" id="btnBuscarRegistro" style="margin-top:14px;">Buscar</button>
       <div class="msg" id="buscaMsg" style="display:none;"></div>
+      <div id="candidatosLista"></div>
     </section>
 
     <section class="card resultado-card" id="resultadoCard" style="display:none;">
@@ -710,10 +712,12 @@ function capturarGeo(){
 
 /* ---------- Envio ---------- */
 let modoRetificacao = null; // idRegistro original, quando estamos retificando
+let modoRetificacaoPin = null; // PIN do dispositivo que gerou o registro original
 let ultimoRegistro = null;  // último registro salvo nesta sessão (para PDF/retificar sem nova consulta)
 
 function iniciarRetificacao(registro){
   modoRetificacao = registro.idRegistro;
+  modoRetificacaoPin = registro.dispositivoPin || null;
   mostrarTab('novo');
 
   document.getElementById('unidade').value = registro.unidade;
@@ -733,13 +737,14 @@ function iniciarRetificacao(registro){
 
   const banner = document.getElementById('retificacaoBanner');
   banner.style.display = 'flex';
-  document.getElementById('retificacaoBannerId').textContent = registro.idRegistro.slice(0, 8);
+  document.getElementById('retificacaoBannerId').textContent = registro.idRegistro;
 
   document.getElementById('btnEnviar').textContent = 'Salvar Retificação';
 }
 
 function cancelarRetificacao(){
   modoRetificacao = null;
+  modoRetificacaoPin = null;
   document.getElementById('retificacaoBanner').style.display = 'none';
   document.getElementById('unidade').disabled = false;
   document.getElementById('armazem').disabled = false;
@@ -785,7 +790,8 @@ document.getElementById('btnEnviar').addEventListener('click', async () => {
     unidade, armazem, camara, tipo, temperatura,
     latitude: geo.lat, longitude: geo.lng, precisaoGps: geo.acc,
     fotos: fotos.map(f => ({ base64: f.base64, mimeType: f.mimeType })),
-    retificacaoDe: modoRetificacao || undefined
+    retificacaoDe: modoRetificacao || undefined,
+    retificacaoDeDispositivoPin: modoRetificacaoPin || undefined
   };
 
   try{
@@ -794,7 +800,8 @@ document.getElementById('btnEnviar').addEventListener('click', async () => {
     if (!data.ok) throw new Error(data.erro || 'Falha ao gravar');
     mostrarSucesso({
       idRegistro: data.idRegistro, unidade, armazem, camara, tipo, temperatura,
-      status: data.status || status, dispositivoNome, idRetificacaoDe: modoRetificacao || '',
+      status: data.status || status, dispositivoNome, dispositivoPin: getPin(),
+      idRetificacaoDe: modoRetificacao || '',
       fotosDataUrl: fotos.map(f => f.dataUrl), dataHora: new Date().toISOString()
     });
     cancelarRetificacao();
@@ -812,7 +819,7 @@ function mostrarSucesso(d){
   document.getElementById('successScreen').style.display = 'block';
   const agora = new Date(d.dataHora);
   document.getElementById('successDetail').innerHTML = `
-    <div>ID: <b>${d.idRegistro.slice(0, 8)}</b>${d.idRetificacaoDe ? ' <span style="color:var(--seco)">(retificação)</span>' : ''}</div>
+    <div>ID: <b>${d.idRegistro}</b>${d.idRetificacaoDe ? ' <span style="color:var(--seco)">(retificação)</span>' : ''}</div>
     <div><b>${agora.toLocaleString('pt-BR')}</b></div>
     <div>Armazém ${d.armazem} · Câmara ${d.camara} (${d.tipo})</div>
     <div>Temperatura: <b>${d.temperatura}°C</b> — ${d.status === 'OK' ? '✅ Dentro da faixa' : '⚠️ Fora da faixa'}</div>
@@ -866,17 +873,41 @@ let resultadoFotosDataUrl = [];
 
 document.getElementById('btnBuscarRegistro').addEventListener('click', async () => {
   const id = document.getElementById('buscaIdInput').value.trim();
+  const pinBusca = document.getElementById('buscaPinInput').value.trim();
   const msg = document.getElementById('buscaMsg');
   msg.style.display = 'none';
   document.getElementById('resultadoCard').style.display = 'none';
+  document.getElementById('candidatosLista').innerHTML = '';
   if (!id){ msg.textContent = 'Informe o ID do registro.'; msg.style.display = 'block'; return; }
 
   const btn = document.getElementById('btnBuscarRegistro');
   btn.disabled = true; btn.textContent = 'Buscando...';
   try{
-    const res = await fetch(APPS_SCRIPT_URL + '?action=registro&id=' + encodeURIComponent(id));
+    let url = APPS_SCRIPT_URL + '?action=registro&id=' + encodeURIComponent(id);
+    if (pinBusca) url += '&dispositivoPin=' + encodeURIComponent(pinBusca);
+    const res = await fetch(url);
     const data = await res.json();
-    if (!data.ok){ msg.textContent = data.erro || 'Registro não encontrado.'; msg.style.display = 'block'; return; }
+
+    if (data.ambiguo){
+      msg.textContent = data.mensagem || 'Existe mais de um registro com este ID. Selecione o dispositivo correto abaixo.';
+      msg.style.display = 'block';
+      document.getElementById('candidatosLista').innerHTML = data.candidatos.map(c => `
+        <div class="retificacao-item" style="cursor:pointer;" data-pin="${c.dispositivoPin}">
+          <b>${c.dispositivoNome || c.dispositivoPin}</b> — ${new Date(c.dataHora).toLocaleString('pt-BR')} —
+          Armazém ${c.armazem} · Câmara ${c.camara}
+        </div>`).join('');
+      document.getElementById('candidatosLista').querySelectorAll('.retificacao-item').forEach(el => {
+        el.addEventListener('click', () => {
+          document.getElementById('buscaPinInput').value = el.dataset.pin;
+          document.getElementById('btnBuscarRegistro').click();
+        });
+      });
+      btn.disabled = false; btn.textContent = 'Buscar';
+      return;
+    }
+
+    if (!data.ok){ msg.textContent = data.erro || 'Registro não encontrado.'; msg.style.display = 'block'; btn.disabled = false; btn.textContent = 'Buscar'; return; }
+
     resultadoAtual = data.registro;
     await exibirResultado(data.registro, data.retificavelHoje, data.retificacoes);
   } catch(err){
@@ -896,7 +927,7 @@ async function exibirResultado(registro, retificavelHoje, retificacoes){
     <div class="resultado-linha"><span>Temperatura</span><span>${registro.temperatura}°C</span></div>
     <div class="resultado-linha"><span>Status</span><span>${registro.status === 'OK' ? '✅ OK' : '⚠️ ALERTA'}</span></div>
     <div class="resultado-linha"><span>Dispositivo</span><span>${registro.dispositivoNome || '—'}</span></div>
-    ${registro.idRetificacaoDe ? `<div class="resultado-linha"><span>Retificação de</span><span>${registro.idRetificacaoDe.slice(0,8)}</span></div>` : ''}
+    ${registro.idRetificacaoDe ? `<div class="resultado-linha"><span>Retificação de</span><span>${registro.idRetificacaoDe.split('|')[0]}</span></div>` : ''}
   `;
 
   const fotosGrid = document.getElementById('resultadoFotos');
@@ -919,7 +950,7 @@ async function exibirResultado(registro, retificavelHoje, retificacoes){
     lista.innerHTML = '<p class="eyebrow" style="margin-top:16px;">Retificações já feitas</p>' +
       retificacoes.map(r => `
         <div class="retificacao-item">
-          <b>${r.idRegistro.slice(0,8)}</b> — ${new Date(r.dataHora).toLocaleString('pt-BR')} —
+          <b>${r.idRegistro}</b> — ${new Date(r.dataHora).toLocaleString('pt-BR')} —
           ${r.temperatura}°C (${r.status === 'OK' ? 'OK' : 'ALERTA'})
         </div>`).join('');
   } else {
@@ -989,7 +1020,7 @@ function gerarPDF(registro, fotosDataUrl){
     });
   }
 
-  doc.save(`checklist_temperatura_${registro.idRegistro.slice(0,8)}.pdf`);
+  doc.save(`checklist_temperatura_${registro.idRegistro}.pdf`);
 }
 
 /* ---------- Boot ---------- */
