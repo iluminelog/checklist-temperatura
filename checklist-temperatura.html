@@ -217,13 +217,15 @@
     <section class="card">
       <p class="eyebrow">Autorização do dispositivo</p>
       <p style="font-size:13.5px;color:var(--muted);margin:0 0 14px;">
-        Informe o PIN cadastrado para este celular. No primeiro uso, o PIN fica
-        vinculado permanentemente a este aparelho.
+        Informe o PIN e a senha cadastrados para este celular. No primeiro uso,
+        ficam vinculados permanentemente a este aparelho.
       </p>
       <label for="pinInput">PIN do dispositivo</label>
       <input type="text" id="pinInput" inputmode="numeric" placeholder="Ex: 1234" autocomplete="off">
+      <label for="senhaInput">Senha numérica</label>
+      <input type="password" id="senhaInput" inputmode="numeric" placeholder="Ex: 0000" autocomplete="off">
       <div class="msg" id="authMsg" style="display:none;"></div>
-      <button class="submit" id="btnValidarPin" style="margin-top:16px;">Validar PIN</button>
+      <button class="submit" id="btnValidarPin" style="margin-top:16px;">Validar acesso</button>
     </section>
   </div>
 
@@ -340,14 +342,17 @@ function getDeviceUuid(){
 function getPin(){ return localStorage.getItem('checklist_device_pin'); }
 function setPin(pin){ localStorage.setItem('checklist_device_pin', pin); }
 function limparPin(){ localStorage.removeItem('checklist_device_pin'); }
+function getSenha(){ return localStorage.getItem('checklist_device_senha'); }
+function setSenha(senha){ localStorage.setItem('checklist_device_senha', senha); }
+function limparSenha(){ localStorage.removeItem('checklist_device_senha'); }
 
 function renderDevice(){
   document.getElementById('deviceLabel').textContent = dispositivoNome || 'não autorizado';
 }
 
-async function validarPin(pin){
+async function validarPin(pin, senha){
   const uuid = getDeviceUuid();
-  const res = await fetch(APPS_SCRIPT_URL + '?action=validarDispositivo&pin=' + encodeURIComponent(pin) + '&uuid=' + encodeURIComponent(uuid));
+  const res = await fetch(APPS_SCRIPT_URL + '?action=validarDispositivo&pin=' + encodeURIComponent(pin) + '&senha=' + encodeURIComponent(senha) + '&uuid=' + encodeURIComponent(uuid));
   return res.json();
 }
 
@@ -365,39 +370,44 @@ function mostrarTelaForm(){
 
 document.getElementById('btnValidarPin').addEventListener('click', async () => {
   const pin = document.getElementById('pinInput').value.trim();
+  const senha = document.getElementById('senhaInput').value.trim();
   const btn = document.getElementById('btnValidarPin');
-  if (!pin){ mostrarTelaAuth('Informe o PIN.'); return; }
+  if (!pin || !senha){ mostrarTelaAuth('Informe o PIN e a senha.'); return; }
   btn.disabled = true; btn.textContent = 'Validando...';
   try{
-    const resultado = await validarPin(pin);
+    const resultado = await validarPin(pin, senha);
     if (resultado.ok){
       setPin(pin);
+      setSenha(senha);
       dispositivoNome = resultado.nomeDispositivo;
       renderDevice();
       mostrarTelaForm();
     } else {
-      mostrarTelaAuth(resultado.mensagem || 'PIN inválido.');
+      mostrarTelaAuth(resultado.mensagem || 'PIN ou senha inválidos.');
     }
   } catch(err){
     mostrarTelaAuth('Erro ao validar: ' + err.message);
   }
-  btn.disabled = false; btn.textContent = 'Validar PIN';
+  btn.disabled = false; btn.textContent = 'Validar acesso';
 });
 
 document.getElementById('btnTrocarDispositivo').addEventListener('click', () => {
   limparPin();
+  limparSenha();
   document.getElementById('pinInput').value = '';
+  document.getElementById('senhaInput').value = '';
   mostrarTelaAuth();
 });
 
 async function initDevice(){
   const pinSalvo = getPin();
-  if (!pinSalvo){
+  const senhaSalva = getSenha();
+  if (!pinSalvo || !senhaSalva){
     mostrarTelaAuth();
     return false;
   }
   try{
-    const resultado = await validarPin(pinSalvo);
+    const resultado = await validarPin(pinSalvo, senhaSalva);
     if (resultado.ok){
       dispositivoNome = resultado.nomeDispositivo;
       renderDevice();
@@ -405,7 +415,8 @@ async function initDevice(){
       return true;
     }
     limparPin();
-    mostrarTelaAuth(resultado.mensagem || 'PIN inválido, informe novamente.');
+    limparSenha();
+    mostrarTelaAuth(resultado.mensagem || 'PIN ou senha inválidos, informe novamente.');
     return false;
   } catch(err){
     mostrarTelaAuth('Não foi possível validar o dispositivo. Verifique a conexão.');
@@ -619,7 +630,7 @@ document.getElementById('btnEnviar').addEventListener('click', async () => {
   const status = avaliarStatus(tipo, temperatura);
 
   const payload = {
-    pin: getPin(), uuid: getDeviceUuid(),
+    pin: getPin(), senha: getSenha(), uuid: getDeviceUuid(),
     unidade, armazem, camara, tipo, temperatura,
     latitude: geo.lat, longitude: geo.lng, precisaoGps: geo.acc,
     fotos: fotos.map(f => ({ base64: f.base64, mimeType: f.mimeType }))
