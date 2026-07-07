@@ -327,7 +327,7 @@
     </section>
 
     <section class="card">
-      <p class="eyebrow">Fotos do painel / termômetro</p>
+      <p class="eyebrow">Fotos do painel / termômetro <span style="color:var(--muted);text-transform:none;letter-spacing:0;font-weight:500;">(mínimo 2)</span></p>
       <div class="photo-grid" id="photoGrid">
         <button type="button" class="add-photo" id="addPhotoBtn">
           <svg viewBox="0 0 24 24" fill="none"><path d="M4 8a2 2 0 012-2h1l1.2-1.6A2 2 0 0110 3.6h4a2 2 0 011.8.8L17 6h1a2 2 0 012 2v10a2 2 0 01-2 2H6a2 2 0 01-2-2V8z" stroke="#7E93A0" stroke-width="1.4"/><circle cx="12" cy="13" r="3.4" stroke="#7E93A0" stroke-width="1.4"/></svg>
@@ -764,8 +764,8 @@ document.getElementById('btnEnviar').addEventListener('click', async () => {
   if (tempStr === ''){
     msg.textContent = 'Informe a temperatura lida.'; msg.style.display = 'block'; return;
   }
-  if (fotos.length === 0){
-    msg.textContent = 'Tire pelo menos uma foto do painel/termômetro.'; msg.style.display = 'block'; return;
+  if (fotos.length < 2){
+    msg.textContent = 'Tire pelo menos duas fotos do painel/termômetro.'; msg.style.display = 'block'; return;
   }
   if (APPS_SCRIPT_URL.indexOf('COLE_AQUI') !== -1){
     msg.textContent = 'Configuração pendente: cole a URL do App da Web no código (APPS_SCRIPT_URL).';
