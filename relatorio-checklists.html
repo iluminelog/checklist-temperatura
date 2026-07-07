@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Relatório · Check List de Temperatura</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0B141C; --panel:#141F29; --panel-alt:#1B2833; --line:#26363F;
+    --text:#E8EEF2; --muted:#7E93A0;
+    --congelado:#49C9E8; --resfriado:#7FAEDB; --seco:#C9A23B;
+    --ok:#4FCE8A; --alerta:#E8604C;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:radial-gradient(1400px 700px at 50% -12%, #182430 0%, var(--bg) 55%);
+    color:var(--text); font-family:'Inter',sans-serif; padding-bottom:80px;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:0 20px;}
+  header.top{padding:26px 0 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;border-bottom:1px solid var(--line);margin-bottom:20px;}
+  header.top h1{font-family:'Barlow Condensed';font-weight:700;font-size:24px;margin:0;}
+  header.top .sub{color:var(--muted);font-size:12.5px;text-transform:uppercase;letter-spacing:.04em;margin-top:3px;}
+
+  .filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:18px;}
+  .filters select, .filters input{
+    background:var(--panel-alt);border:1px solid var(--line);color:var(--text);
+    border-radius:9px;padding:9px 12px;font-size:13px;font-family:'Inter';
+  }
+  .filters input[type="text"]{min-width:130px;}
+  .btn-refresh{
+    background:var(--congelado);color:#06212A;border:none;border-radius:9px;
+    padding:9px 16px;font-family:'Barlow Condensed';font-weight:700;font-size:13.5px;
+    text-transform:uppercase;letter-spacing:.03em;cursor:pointer;
+  }
+
+  .tabela-wrap{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;}
+  table{width:100%;border-collapse:collapse;}
+  thead th{
+    background:var(--panel-alt);color:var(--muted);font-size:10.5px;text-transform:uppercase;
+    letter-spacing:.04em;text-align:left;padding:10px 12px;font-weight:600;white-space:nowrap;
+  }
+  tbody td{padding:9px 12px;font-size:12.5px;border-top:1px solid var(--line);font-family:'IBM Plex Mono',monospace;white-space:nowrap;}
+  tbody tr.alerta td{color:var(--alerta);}
+  tbody tr:hover td{background:var(--panel-alt);}
+  .status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;}
+  .status-dot.ok{background:var(--ok);} .status-dot.alerta{background:var(--alerta);}
+  .tipo-tag{font-family:'Barlow Condensed';font-weight:700;font-size:11px;letter-spacing:.05em;text-transform:uppercase;padding:2px 8px;border-radius:6px;}
+  .tag-Congelado{background:rgba(73,201,232,.15);color:var(--congelado);}
+  .tag-Resfriado{background:rgba(127,174,219,.15);color:var(--resfriado);}
+  .tag-Seco{background:rgba(201,162,59,.18);color:var(--seco);}
+  .ret-badge{font-size:10.5px;color:var(--seco);border:1px solid var(--seco);border-radius:5px;padding:1px 5px;}
+
+  .empty{color:var(--muted);font-size:13px;padding:24px;text-align:center;}
+
+  .barra-acoes{
+    position:fixed;left:0;right:0;bottom:0;
+    background:rgba(11,20,28,.96);backdrop-filter:blur(6px);
+    border-top:1px solid var(--line);padding:14px 20px;
+    display:flex;align-items:center;justify-content:center;gap:16px;
+    transform:translateY(120%);transition:transform .2s;
+  }
+  .barra-acoes.show{transform:translateY(0);}
+  .barra-acoes span{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--muted);}
+  .barra-acoes span b{color:var(--text);}
+  .btn-gerar-pdf{
+    background:var(--congelado);color:#06212A;border:none;border-radius:9px;
+    padding:11px 22px;font-family:'Barlow Condensed';font-weight:700;font-size:14px;
+    text-transform:uppercase;letter-spacing:.03em;cursor:pointer;
+  }
+  .btn-gerar-pdf:disabled{opacity:.5;cursor:not-allowed;}
+  .btn-limpar-selecao{
+    background:none;border:1px solid var(--line);color:var(--muted);border-radius:9px;
+    padding:11px 16px;font-family:'Inter';font-size:12.5px;cursor:pointer;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Relatório de Check Lists</h1>
+      <div class="sub">Câmaras Frias · Zilog</div>
+    </div>
+    <div class="filters">
+      <select id="fUnidade"></select>
+      <select id="fArmazem"></select>
+      <select id="fTipo">
+        <option value="">Todos os tipos</option>
+        <option value="Congelado">Congelado</option>
+        <option value="Resfriado">Resfriado</option>
+        <option value="Seco">Seco</option>
+      </select>
+      <select id="fStatus">
+        <option value="">Todos os status</option>
+        <option value="OK">OK</option>
+        <option value="ALERTA">Alerta</option>
+      </select>
+      <input type="date" id="fInicio">
+      <input type="date" id="fFim">
+      <input type="text" id="fId" placeholder="Buscar por ID">
+      <button class="btn-refresh" id="btnAtualizar">Atualizar</button>
+    </div>
+  </header>
+
+  <div class="tabela-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th><input type="checkbox" id="checkTodos"></th>
+          <th>ID</th><th>Data/Hora</th><th>Unidade</th><th>Arm</th><th>Cam</th>
+          <th>Tipo</th><th>Temp.</th><th>Status</th><th>Dispositivo</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="corpoTabela"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="barra-acoes" id="barraAcoes">
+  <span><b id="qtdSelecionados">0</b> selecionado(s)</span>
+  <button class="btn-gerar-pdf" id="btnGerarPdf" disabled>Gerar PDF dos selecionados</button>
+  <button class="btn-limpar-selecao" id="btnLimparSelecao">Limpar seleção</button>
+</div>
+
+<script>
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyHnZuExXmoXssYJagCXouzmPzUGwFp4v4d0NMzGbyDcm42rRoMxqx5iDBo4Q-K1j0/exec';
+
+let REGISTROS = [];
+let selecionados = new Set(); // idRegistro + '|' + dispositivoPin, pra evitar ambiguidade
+
+function chaveRegistro(r){ return r.idRegistro + '|' + r.dispositivoPin; }
+
+async function carregarDados(){
+  document.getElementById('corpoTabela').innerHTML = '<tr><td colspan="10" class="empty">Carregando...</td></tr>';
+  try{
+    const res = await fetch(APPS_SCRIPT_URL + '?action=dados');
+    const data = await res.json();
+    REGISTROS = (data.registros || []).map(r => ({ ...r, temperatura: Number(r.temperatura) }));
+    popularFiltros();
+    renderTabela();
+  } catch(err){
+    document.getElementById('corpoTabela').innerHTML = `<tr><td colspan="10" class="empty">Erro ao carregar: ${err.message}</td></tr>`;
+  }
+}
+
+function popularFiltros(){
+  const fu = document.getElementById('fUnidade');
+  if (!fu.dataset.init){
+    const unidades = [...new Set(REGISTROS.map(r => r.unidade))];
+    fu.innerHTML = '<option value="">Todas unidades</option>' + unidades.map(u => `<option value="${u}">${u}</option>`).join('');
+    fu.dataset.init = '1';
+  }
+  atualizarArmazens();
+}
+function atualizarArmazens(){
+  const u = document.getElementById('fUnidade').value;
+  const armazens = [...new Set(REGISTROS.filter(r => !u || r.unidade === u).map(r => r.armazem))];
+  const fa = document.getElementById('fArmazem');
+  const atual = fa.value;
+  fa.innerHTML = '<option value="">Todos armazéns</option>' + armazens.map(a => `<option value="${a}">Armazém ${a}</option>`).join('');
+  if (armazens.includes(atual)) fa.value = atual;
+}
+
+document.getElementById('fUnidade').addEventListener('change', () => { atualizarArmazens(); renderTabela(); });
+['fArmazem','fTipo','fStatus','fInicio','fFim'].forEach(id => {
+  document.getElementById(id).addEventListener('change', renderTabela);
+});
+document.getElementById('fId').addEventListener('input', renderTabela);
+document.getElementById('btnAtualizar').addEventListener('click', carregarDados);
+
+function registrosFiltrados(){
+  const u = document.getElementById('fUnidade').value;
+  const a = document.getElementById('fArmazem').value;
+  const tipo = document.getElementById('fTipo').value;
+  const status = document.getElementById('fStatus').value;
+  const idBusca = document.getElementById('fId').value.trim().toLowerCase();
+  const ini = document.getElementById('fInicio').value ? new Date(document.getElementById('fInicio').value) : null;
+  const fim = document.getElementById('fFim').value ? new Date(document.getElementById('fFim').value + 'T23:59:59') : null;
+
+  return REGISTROS.filter(r => {
+    const d = new Date(r.dataHora);
+    if (u && r.unidade !== u) return false;
+    if (a && r.armazem !== a) return false;
+    if (tipo && r.tipo !== tipo) return false;
+    if (status && r.status !== status) return false;
+    if (idBusca && !r.idRegistro.toLowerCase().includes(idBusca)) return false;
+    if (ini && d < ini) return false;
+    if (fim && d > fim) return false;
+    return true;
+  }).sort((x, y) => new Date(y.dataHora) - new Date(x.dataHora));
+}
+
+function renderTabela(){
+  const regs = registrosFiltrados();
+  const corpo = document.getElementById('corpoTabela');
+  if (!regs.length){
+    corpo.innerHTML = '<tr><td colspan="10" class="empty">Nenhum registro encontrado.</td></tr>';
+    atualizarBarraAcoes();
+    return;
+  }
+  corpo.innerHTML = regs.map(r => {
+    const chave = chaveRegistro(r);
+    return `
+      <tr class="${r.status === 'ALERTA' ? 'alerta' : ''}">
+        <td><input type="checkbox" class="check-linha" data-chave="${chave}" ${selecionados.has(chave) ? 'checked' : ''}></td>
+        <td>${r.idRegistro}</td>
+        <td>${new Date(r.dataHora).toLocaleString('pt-BR')}</td>
+        <td>${r.unidade || '-'}</td>
+        <td>${r.armazem}</td>
+        <td>${r.camara}</td>
+        <td><span class="tipo-tag tag-${r.tipo}">${r.tipo}</span></td>
+        <td>${r.temperatura}°C</td>
+        <td><span class="status-dot ${r.status === 'ALERTA' ? 'alerta' : 'ok'}"></span>${r.status}</td>
+        <td>${r.dispositivoNome || '-'}</td>
+        <td>${r.idRetificacaoDe ? '<span class="ret-badge">retificação</span>' : ''}</td>
+      </tr>`;
+  }).join('');
+
+  corpo.querySelectorAll('.check-linha').forEach(chk => {
+    chk.addEventListener('change', () => {
+      if (chk.checked) selecionados.add(chk.dataset.chave);
+      else selecionados.delete(chk.dataset.chave);
+      atualizarBarraAcoes();
+      atualizarCheckTodos();
+    });
+  });
+  atualizarCheckTodos();
+  atualizarBarraAcoes();
+}
+
+function atualizarCheckTodos(){
+  const linhas = [...document.querySelectorAll('.check-linha')];
+  const checkTodos = document.getElementById('checkTodos');
+  if (!linhas.length){ checkTodos.checked = false; checkTodos.indeterminate = false; return; }
+  const marcados = linhas.filter(l => l.checked).length;
+  checkTodos.checked = marcados === linhas.length;
+  checkTodos.indeterminate = marcados > 0 && marcados < linhas.length;
+}
+
+document.getElementById('checkTodos').addEventListener('change', (e) => {
+  document.querySelectorAll('.check-linha').forEach(chk => {
+    chk.checked = e.target.checked;
+    if (e.target.checked) selecionados.add(chk.dataset.chave);
+    else selecionados.delete(chk.dataset.chave);
+  });
+  atualizarBarraAcoes();
+});
+
+function atualizarBarraAcoes(){
+  const qtd = selecionados.size;
+  document.getElementById('qtdSelecionados').textContent = qtd;
+  document.getElementById('barraAcoes').classList.toggle('show', qtd > 0);
+  document.getElementById('btnGerarPdf').disabled = qtd === 0;
+}
+
+document.getElementById('btnLimparSelecao').addEventListener('click', () => {
+  selecionados.clear();
+  renderTabela();
+});
+
+/* ---------- Fotos e geração de PDF ---------- */
+function extrairFileId(url){
+  const m = String(url).match(/\/d\/([a-zA-Z0-9_-]+)/);
+  return m ? m[1] : null;
+}
+async function carregarFotoBase64(url){
+  const fileId = extrairFileId(url);
+  if (!fileId) return null;
+  try{
+    const res = await fetch(APPS_SCRIPT_URL + '?action=foto&id=' + encodeURIComponent(fileId));
+    const data = await res.json();
+    if (!data.ok) return null;
+    return `data:${data.mimeType};base64,${data.base64}`;
+  } catch(e){ return null; }
+}
+
+function adicionarPaginaChecklist(doc, registro, fotosDataUrl, primeira){
+  if (!primeira) doc.addPage();
+  const agora = new Date(registro.dataHora);
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(20);
+  doc.text('Check List de Temperatura - Câmaras Frias', 14, 18);
+  doc.setFontSize(10); doc.setTextColor(120);
+  doc.text('Zilog', 14, 24);
+  doc.setDrawColor(200);
+  doc.line(14, 28, 196, 28);
+
+  const linhas = [
+    ['ID do Registro', registro.idRegistro],
+    ['Data/Hora', agora.toLocaleString('pt-BR')],
+    ['Unidade', registro.unidade || '-'],
+    ['Armazém', String(registro.armazem)],
+    ['Câmara', String(registro.camara)],
+    ['Tipo', registro.tipo],
+    ['Temperatura', registro.temperatura + '°C'],
+    ['Status', registro.status === 'OK' ? 'Dentro da faixa' : 'Fora da faixa (ALERTA)'],
+    ['Dispositivo', registro.dispositivoNome || '-']
+  ];
+  if (registro.idRetificacaoDe){
+    linhas.push(['Retificação do registro', registro.idRetificacaoDe.split('|')[0]]);
+  }
+
+  let y = 38;
+  doc.setFontSize(11);
+  linhas.forEach(([label, valor]) => {
+    doc.setFont('helvetica', 'bold'); doc.setTextColor(60);
+    doc.text(label + ':', 14, y);
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(20);
+    doc.text(String(valor), 70, y);
+    y += 8;
+  });
+
+  if (fotosDataUrl && fotosDataUrl.length){
+    y += 6;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(60);
+    doc.text('Fotos do painel / termômetro', 14, y);
+    y += 6;
+    const larguraImg = 85, alturaImg = 65;
+    let x = 14;
+    fotosDataUrl.forEach(du => {
+      if (y + alturaImg > 285){ doc.addPage(); y = 18; x = 14; }
+      try { doc.addImage(du, 'JPEG', x, y, larguraImg, alturaImg); } catch(e){ /* ignora foto inválida */ }
+      if (x === 14){ x = 105; } else { x = 14; y += alturaImg + 6; }
+    });
+  }
+}
+
+document.getElementById('btnGerarPdf').addEventListener('click', async () => {
+  const btn = document.getElementById('btnGerarPdf');
+  btn.disabled = true; btn.textContent = 'Gerando PDF...';
+
+  const chaves = [...selecionados];
+  const escolhidos = REGISTROS.filter(r => chaves.includes(chaveRegistro(r)))
+    .sort((a, b) => new Date(a.dataHora) - new Date(b.dataHora));
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+
+  for (let i = 0; i < escolhidos.length; i++){
+    const registro = escolhidos[i];
+    btn.textContent = `Gerando PDF... (${i + 1}/${escolhidos.length})`;
+    let fotosDataUrl = [];
+    if (registro.fotos && registro.fotos.length){
+      fotosDataUrl = (await Promise.all(registro.fotos.map(carregarFotoBase64))).filter(Boolean);
+    }
+    adicionarPaginaChecklist(doc, registro, fotosDataUrl, i === 0);
+  }
+
+  const nomeArquivo = escolhidos.length === 1
+    ? `checklist_temperatura_${escolhidos[0].idRegistro}.pdf`
+    : `checklists_temperatura_${escolhidos.length}_registros.pdf`;
+  doc.save(nomeArquivo);
+
+  btn.disabled = false; btn.textContent = 'Gerar PDF dos selecionados';
+});
+
+carregarDados();
+</script>
+</body>
+</html>
