@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
 <title>Check List de Temperatura · Câmaras Frias</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
   :root{
@@ -190,6 +191,57 @@
   }
 
   footer.hint{text-align:center;color:var(--muted);font-size:11px;margin-top:22px;padding:0 30px;}
+
+  .nav-tabs{display:flex;gap:8px;margin-top:14px;}
+  .nav-tabs button{
+    flex:1;padding:10px;border-radius:9px;border:1px solid var(--line);
+    background:var(--panel-alt);color:var(--muted);font-family:'Barlow Condensed';
+    font-weight:700;font-size:13.5px;letter-spacing:.03em;text-transform:uppercase;cursor:pointer;
+  }
+  .nav-tabs button.active{background:var(--congelado);color:#06212A;border-color:var(--congelado);}
+
+  .retificacao-banner{
+    background:rgba(201,162,59,.14);border:1px solid var(--seco);color:var(--seco);
+    border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:12.5px;
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+  }
+  .retificacao-banner button{
+    background:none;border:none;color:var(--seco);font-weight:600;font-size:12px;
+    text-decoration:underline;cursor:pointer;flex-shrink:0;
+  }
+
+  .busca-row{display:flex;gap:8px;}
+  .busca-row input{flex:1;}
+  .busca-row button{
+    background:var(--congelado);color:#06212A;border:none;border-radius:10px;
+    padding:0 18px;font-family:'Barlow Condensed';font-weight:700;font-size:14px;
+    text-transform:uppercase;cursor:pointer;
+  }
+
+  .resultado-card{margin-top:16px;}
+  .resultado-linha{
+    display:flex;justify-content:space-between;padding:8px 0;
+    border-bottom:1px solid var(--line);font-size:13px;
+  }
+  .resultado-linha:last-child{border-bottom:none;}
+  .resultado-linha span:first-child{color:var(--muted);}
+  .resultado-linha span:last-child{font-family:'IBM Plex Mono',monospace;text-align:right;}
+
+  .acoes-registro{display:flex;gap:10px;margin-top:16px;}
+  .acoes-registro button{
+    flex:1;padding:12px;border-radius:10px;font-family:'Barlow Condensed';
+    font-weight:700;font-size:13.5px;text-transform:uppercase;letter-spacing:.02em;cursor:pointer;
+  }
+  .btn-pdf{background:var(--panel-alt);border:1px solid var(--line);color:var(--text);}
+  .btn-retificar{background:var(--seco);border:none;color:#2A2107;}
+  .btn-retificar:disabled{opacity:.4;cursor:not-allowed;}
+
+  .retificacoes-lista{margin-top:14px;}
+  .retificacao-item{
+    background:var(--panel-alt);border:1px solid var(--line);border-radius:9px;
+    padding:10px 12px;margin-top:8px;font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--muted);
+  }
+  .retificacao-item b{color:var(--text);}
 </style>
 </head>
 <body>
@@ -229,8 +281,18 @@
     </section>
   </div>
 
+  <!-- NAV (só aparece após autorização) -->
+  <div class="nav-tabs" id="navTabs" style="display:none;">
+    <button id="tabNovo" class="active">Novo Registro</button>
+    <button id="tabConsulta">Consultar / Retificar</button>
+  </div>
+
   <!-- FORM SCREEN -->
   <div id="formScreen" style="display:none;">
+    <div class="retificacao-banner" id="retificacaoBanner" style="display:none;">
+      <span>Retificando registro <b id="retificacaoBannerId"></b></span>
+      <button id="btnCancelarRetificacao">cancelar</button>
+    </div>
     <section class="card">
       <p class="eyebrow">Localização do registro</p>
 
@@ -292,7 +354,34 @@
     <h2>Registro salvo</h2>
     <p>Os dados foram gravados na planilha e as fotos no Drive.</p>
     <div class="success-detail" id="successDetail"></div>
+    <div class="acoes-registro">
+      <button class="btn-pdf" id="btnPdfSucesso">Gerar PDF</button>
+      <button class="btn-retificar" id="btnRetificarSucesso">Retificar agora</button>
+    </div>
     <button class="novo" id="btnNovo">Novo Registro</button>
+  </div>
+
+  <!-- CONSULTA SCREEN -->
+  <div id="consultaScreen" style="display:none;">
+    <section class="card">
+      <p class="eyebrow">Buscar registro por ID</p>
+      <div class="busca-row">
+        <input type="text" id="buscaIdInput" placeholder="Cole o ID do registro">
+        <button id="btnBuscarRegistro">Buscar</button>
+      </div>
+      <div class="msg" id="buscaMsg" style="display:none;"></div>
+    </section>
+
+    <section class="card resultado-card" id="resultadoCard" style="display:none;">
+      <p class="eyebrow">Registro encontrado</p>
+      <div id="resultadoDetalhe"></div>
+      <div class="photo-grid" id="resultadoFotos" style="margin-top:12px;"></div>
+      <div class="acoes-registro">
+        <button class="btn-pdf" id="btnPdfConsulta">Gerar PDF</button>
+        <button class="btn-retificar" id="btnRetificarConsulta">Retificar</button>
+      </div>
+      <div class="retificacoes-lista" id="retificacoesLista"></div>
+    </section>
   </div>
 
   <footer class="hint">Data, hora e localização são registradas automaticamente no envio.</footer>
@@ -358,6 +447,8 @@ async function validarPin(pin, senha){
 
 function mostrarTelaAuth(mensagemErro){
   document.getElementById('formScreen').style.display = 'none';
+  document.getElementById('consultaScreen').style.display = 'none';
+  document.getElementById('navTabs').style.display = 'none';
   document.getElementById('authScreen').style.display = 'block';
   const msg = document.getElementById('authMsg');
   if (mensagemErro){ msg.textContent = mensagemErro; msg.style.display = 'block'; }
@@ -365,8 +456,29 @@ function mostrarTelaAuth(mensagemErro){
 }
 function mostrarTelaForm(){
   document.getElementById('authScreen').style.display = 'none';
-  document.getElementById('formScreen').style.display = 'block';
+  document.getElementById('navTabs').style.display = 'flex';
+  mostrarTab('novo');
 }
+
+function mostrarTab(tab){
+  const formScreen = document.getElementById('formScreen');
+  const consultaScreen = document.getElementById('consultaScreen');
+  const successScreen = document.getElementById('successScreen');
+  const tabNovo = document.getElementById('tabNovo');
+  const tabConsulta = document.getElementById('tabConsulta');
+  successScreen.style.display = 'none';
+  if (tab === 'consulta'){
+    formScreen.style.display = 'none';
+    consultaScreen.style.display = 'block';
+    tabNovo.classList.remove('active'); tabConsulta.classList.add('active');
+  } else {
+    consultaScreen.style.display = 'none';
+    formScreen.style.display = 'block';
+    tabConsulta.classList.remove('active'); tabNovo.classList.add('active');
+  }
+}
+document.getElementById('tabNovo').addEventListener('click', () => mostrarTab('novo'));
+document.getElementById('tabConsulta').addEventListener('click', () => mostrarTab('consulta'));
 
 document.getElementById('btnValidarPin').addEventListener('click', async () => {
   const pin = document.getElementById('pinInput').value.trim();
@@ -597,6 +709,45 @@ function capturarGeo(){
 }
 
 /* ---------- Envio ---------- */
+let modoRetificacao = null; // idRegistro original, quando estamos retificando
+let ultimoRegistro = null;  // último registro salvo nesta sessão (para PDF/retificar sem nova consulta)
+
+function iniciarRetificacao(registro){
+  modoRetificacao = registro.idRegistro;
+  mostrarTab('novo');
+
+  document.getElementById('unidade').value = registro.unidade;
+  atualizarArmazens();
+  document.getElementById('armazem').value = registro.armazem;
+  atualizarCamaras();
+  document.getElementById('camara').value = registro.camara;
+  atualizarFaixa();
+
+  document.getElementById('unidade').disabled = true;
+  document.getElementById('armazem').disabled = true;
+  document.getElementById('camara').disabled = true;
+
+  document.getElementById('temperatura').value = '';
+  fotos = []; renderPhotoGrid();
+  avaliarTemperatura();
+
+  const banner = document.getElementById('retificacaoBanner');
+  banner.style.display = 'flex';
+  document.getElementById('retificacaoBannerId').textContent = registro.idRegistro.slice(0, 8);
+
+  document.getElementById('btnEnviar').textContent = 'Salvar Retificação';
+}
+
+function cancelarRetificacao(){
+  modoRetificacao = null;
+  document.getElementById('retificacaoBanner').style.display = 'none';
+  document.getElementById('unidade').disabled = false;
+  document.getElementById('armazem').disabled = false;
+  document.getElementById('camara').disabled = false;
+  document.getElementById('btnEnviar').textContent = 'Registrar Check List';
+}
+document.getElementById('btnCancelarRetificacao').addEventListener('click', cancelarRetificacao);
+
 document.getElementById('btnEnviar').addEventListener('click', async () => {
   const msg = document.getElementById('msgErro');
   msg.style.display = 'none';
@@ -633,34 +784,56 @@ document.getElementById('btnEnviar').addEventListener('click', async () => {
     pin: getPin(), senha: getSenha(), uuid: getDeviceUuid(),
     unidade, armazem, camara, tipo, temperatura,
     latitude: geo.lat, longitude: geo.lng, precisaoGps: geo.acc,
-    fotos: fotos.map(f => ({ base64: f.base64, mimeType: f.mimeType }))
+    fotos: fotos.map(f => ({ base64: f.base64, mimeType: f.mimeType })),
+    retificacaoDe: modoRetificacao || undefined
   };
 
   try{
     const res = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
     const data = await res.json();
     if (!data.ok) throw new Error(data.erro || 'Falha ao gravar');
-    mostrarSucesso({ unidade, armazem, camara, tipo, temperatura, status: data.status || status });
+    mostrarSucesso({
+      idRegistro: data.idRegistro, unidade, armazem, camara, tipo, temperatura,
+      status: data.status || status, dispositivoNome, idRetificacaoDe: modoRetificacao || '',
+      fotosDataUrl: fotos.map(f => f.dataUrl), dataHora: new Date().toISOString()
+    });
+    cancelarRetificacao();
   } catch (err){
     msg.textContent = 'Erro ao enviar: ' + err.message;
     msg.style.display = 'block';
-    btn.disabled = false; btn.classList.remove('sending'); btn.textContent = 'Registrar Check List';
+    btn.disabled = false; btn.classList.remove('sending'); btn.textContent = modoRetificacao ? 'Salvar Retificação' : 'Registrar Check List';
   }
 });
 
 function mostrarSucesso(d){
+  ultimoRegistro = d;
   document.getElementById('formScreen').style.display = 'none';
+  document.getElementById('navTabs').style.display = 'none';
   document.getElementById('successScreen').style.display = 'block';
-  const agora = new Date();
+  const agora = new Date(d.dataHora);
   document.getElementById('successDetail').innerHTML = `
+    <div>ID: <b>${d.idRegistro.slice(0, 8)}</b>${d.idRetificacaoDe ? ' <span style="color:var(--seco)">(retificação)</span>' : ''}</div>
     <div><b>${agora.toLocaleString('pt-BR')}</b></div>
     <div>Armazém ${d.armazem} · Câmara ${d.camara} (${d.tipo})</div>
     <div>Temperatura: <b>${d.temperatura}°C</b> — ${d.status === 'OK' ? '✅ Dentro da faixa' : '⚠️ Fora da faixa'}</div>
   `;
 }
+
+document.getElementById('btnPdfSucesso').addEventListener('click', () => {
+  if (ultimoRegistro) gerarPDF(ultimoRegistro, ultimoRegistro.fotosDataUrl || []);
+});
+document.getElementById('btnRetificarSucesso').addEventListener('click', () => {
+  if (!ultimoRegistro) return;
+  document.getElementById('successScreen').style.display = 'none';
+  document.getElementById('navTabs').style.display = 'flex';
+  iniciarRetificacao(ultimoRegistro);
+});
+
 document.getElementById('btnNovo').addEventListener('click', () => {
   document.getElementById('successScreen').style.display = 'none';
-  document.getElementById('formScreen').style.display = 'block';
+  document.getElementById('navTabs').style.display = 'flex';
+  mostrarTab('novo');
+  cancelarRetificacao();
   document.getElementById('btnEnviar').disabled = false;
   document.getElementById('btnEnviar').classList.remove('sending');
   document.getElementById('btnEnviar').textContent = 'Registrar Check List';
@@ -670,6 +843,154 @@ document.getElementById('btnNovo').addEventListener('click', () => {
   document.getElementById('geoTexto').textContent = 'Localização será capturada ao enviar';
   avaliarTemperatura();
 });
+
+/* ---------- Consulta por ID ---------- */
+function extrairFileId(url){
+  const m = String(url).match(/\/d\/([a-zA-Z0-9_-]+)/);
+  return m ? m[1] : null;
+}
+
+async function carregarFotoBase64(url){
+  const fileId = extrairFileId(url);
+  if (!fileId) return null;
+  try{
+    const res = await fetch(APPS_SCRIPT_URL + '?action=foto&id=' + encodeURIComponent(fileId));
+    const data = await res.json();
+    if (!data.ok) return null;
+    return `data:${data.mimeType};base64,${data.base64}`;
+  } catch(e){ return null; }
+}
+
+let resultadoAtual = null;
+let resultadoFotosDataUrl = [];
+
+document.getElementById('btnBuscarRegistro').addEventListener('click', async () => {
+  const id = document.getElementById('buscaIdInput').value.trim();
+  const msg = document.getElementById('buscaMsg');
+  msg.style.display = 'none';
+  document.getElementById('resultadoCard').style.display = 'none';
+  if (!id){ msg.textContent = 'Informe o ID do registro.'; msg.style.display = 'block'; return; }
+
+  const btn = document.getElementById('btnBuscarRegistro');
+  btn.disabled = true; btn.textContent = 'Buscando...';
+  try{
+    const res = await fetch(APPS_SCRIPT_URL + '?action=registro&id=' + encodeURIComponent(id));
+    const data = await res.json();
+    if (!data.ok){ msg.textContent = data.erro || 'Registro não encontrado.'; msg.style.display = 'block'; return; }
+    resultadoAtual = data.registro;
+    await exibirResultado(data.registro, data.retificavelHoje, data.retificacoes);
+  } catch(err){
+    msg.textContent = 'Erro na busca: ' + err.message; msg.style.display = 'block';
+  }
+  btn.disabled = false; btn.textContent = 'Buscar';
+});
+
+async function exibirResultado(registro, retificavelHoje, retificacoes){
+  document.getElementById('resultadoCard').style.display = 'block';
+  const agora = new Date(registro.dataHora);
+  document.getElementById('resultadoDetalhe').innerHTML = `
+    <div class="resultado-linha"><span>ID</span><span>${registro.idRegistro}</span></div>
+    <div class="resultado-linha"><span>Data/Hora</span><span>${agora.toLocaleString('pt-BR')}</span></div>
+    <div class="resultado-linha"><span>Local</span><span>Armazém ${registro.armazem} · Câmara ${registro.camara}</span></div>
+    <div class="resultado-linha"><span>Tipo</span><span>${registro.tipo}</span></div>
+    <div class="resultado-linha"><span>Temperatura</span><span>${registro.temperatura}°C</span></div>
+    <div class="resultado-linha"><span>Status</span><span>${registro.status === 'OK' ? '✅ OK' : '⚠️ ALERTA'}</span></div>
+    <div class="resultado-linha"><span>Dispositivo</span><span>${registro.dispositivoNome || '—'}</span></div>
+    ${registro.idRetificacaoDe ? `<div class="resultado-linha"><span>Retificação de</span><span>${registro.idRetificacaoDe.slice(0,8)}</span></div>` : ''}
+  `;
+
+  const fotosGrid = document.getElementById('resultadoFotos');
+  fotosGrid.innerHTML = '<span style="color:var(--muted);font-size:12px;">Carregando fotos...</span>';
+  resultadoFotosDataUrl = [];
+  if (registro.fotos && registro.fotos.length){
+    const carregadas = await Promise.all(registro.fotos.map(carregarFotoBase64));
+    resultadoFotosDataUrl = carregadas.filter(Boolean);
+    fotosGrid.innerHTML = resultadoFotosDataUrl.map(du => `<div class="photo-thumb"><img src="${du}"></div>`).join('') || '<span style="color:var(--muted);font-size:12px;">Sem fotos.</span>';
+  } else {
+    fotosGrid.innerHTML = '<span style="color:var(--muted);font-size:12px;">Sem fotos.</span>';
+  }
+
+  const btnRet = document.getElementById('btnRetificarConsulta');
+  btnRet.disabled = !retificavelHoje;
+  btnRet.textContent = retificavelHoje ? 'Retificar' : 'Só é possível no mesmo dia';
+
+  const lista = document.getElementById('retificacoesLista');
+  if (retificacoes && retificacoes.length){
+    lista.innerHTML = '<p class="eyebrow" style="margin-top:16px;">Retificações já feitas</p>' +
+      retificacoes.map(r => `
+        <div class="retificacao-item">
+          <b>${r.idRegistro.slice(0,8)}</b> — ${new Date(r.dataHora).toLocaleString('pt-BR')} —
+          ${r.temperatura}°C (${r.status === 'OK' ? 'OK' : 'ALERTA'})
+        </div>`).join('');
+  } else {
+    lista.innerHTML = '';
+  }
+}
+
+document.getElementById('btnPdfConsulta').addEventListener('click', () => {
+  if (resultadoAtual) gerarPDF(resultadoAtual, resultadoFotosDataUrl);
+});
+document.getElementById('btnRetificarConsulta').addEventListener('click', () => {
+  if (resultadoAtual) iniciarRetificacao(resultadoAtual);
+});
+
+/* ---------- Geração de PDF ---------- */
+function gerarPDF(registro, fotosDataUrl){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  const agora = new Date(registro.dataHora);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.text('Check List de Temperatura - Câmaras Frias', 14, 18);
+  doc.setFontSize(10);
+  doc.setTextColor(120);
+  doc.text('Zilog', 14, 24);
+
+  doc.setDrawColor(200);
+  doc.line(14, 28, 196, 28);
+
+  const linhas = [
+    ['ID do Registro', registro.idRegistro],
+    ['Data/Hora', agora.toLocaleString('pt-BR')],
+    ['Unidade', registro.unidade || '-'],
+    ['Armazém', String(registro.armazem)],
+    ['Câmara', String(registro.camara)],
+    ['Tipo', registro.tipo],
+    ['Temperatura', registro.temperatura + '°C'],
+    ['Status', registro.status === 'OK' ? 'Dentro da faixa' : 'Fora da faixa (ALERTA)'],
+    ['Dispositivo', registro.dispositivoNome || '-']
+  ];
+  if (registro.idRetificacaoDe){
+    linhas.push(['Retificação do registro', registro.idRetificacaoDe]);
+  }
+
+  let y = 38;
+  doc.setFontSize(11);
+  linhas.forEach(([label, valor]) => {
+    doc.setFont('helvetica', 'bold'); doc.setTextColor(60);
+    doc.text(label + ':', 14, y);
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(20);
+    doc.text(String(valor), 70, y);
+    y += 8;
+  });
+
+  if (fotosDataUrl && fotosDataUrl.length){
+    y += 6;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(60);
+    doc.text('Fotos do painel / termômetro', 14, y);
+    y += 6;
+    const larguraImg = 85, alturaImg = 65;
+    let x = 14;
+    fotosDataUrl.forEach((du, i) => {
+      if (y + alturaImg > 285){ doc.addPage(); y = 18; }
+      try { doc.addImage(du, 'JPEG', x, y, larguraImg, alturaImg); } catch(e){ /* ignora foto inválida */ }
+      if (x === 14){ x = 105; } else { x = 14; y += alturaImg + 6; }
+    });
+  }
+
+  doc.save(`checklist_temperatura_${registro.idRegistro.slice(0,8)}.pdf`);
+}
 
 /* ---------- Boot ---------- */
 (async function init(){
