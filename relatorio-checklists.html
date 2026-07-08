@@ -24,7 +24,7 @@
     color:var(--text); font-family:'Inter',sans-serif; padding-bottom:90px;
     -webkit-font-smoothing:antialiased;
   }
-  .wrap{max-width:1220px;margin:0 auto;padding:0 24px;}
+  .wrap{max-width:1440px;margin:0 auto;padding:0 28px;}
 
   header.top{
     background:var(--surface);
@@ -74,15 +74,19 @@
 
   .tabela-wrap{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:var(--shadow-sm);}
   .tabela-scroll{overflow-x:auto;}
-  table{width:100%;border-collapse:collapse;}
+  table{width:100%;border-collapse:separate;border-spacing:0;table-layout:auto;}
   thead th{
     background:var(--surface-alt);color:var(--primary-dark);font-size:11px;text-transform:uppercase;
-    letter-spacing:.05em;text-align:left;padding:12px 14px;font-weight:700;white-space:nowrap;
+    letter-spacing:.05em;text-align:left;padding:14px 20px;font-weight:700;white-space:nowrap;
     border-bottom:1px solid var(--border);
   }
-  tbody td{padding:11px 14px;font-size:13px;border-top:1px solid var(--border);white-space:nowrap;color:var(--text);}
+  thead th:first-child{padding-left:20px;}
+  tbody td{padding:13px 20px;font-size:13.5px;border-top:1px solid var(--border);white-space:nowrap;color:var(--text);}
+  tbody td:first-child{padding-left:20px;}
+  tbody tr:nth-child(even) td{background:#FBFCFB;}
   tbody tr.alerta td{color:var(--alerta);font-weight:500;}
-  tbody tr:hover td{background:var(--surface-alt);}
+  tbody tr:hover td{background:var(--surface-alt) !important;}
+  .col-temp, .col-id{font-variant-numeric:tabular-nums;}
   .status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;}
   .status-dot.ok{background:var(--ok);} .status-dot.alerta{background:var(--alerta);}
   .tipo-tag{font-family:'Inter';font-weight:700;font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;padding:3px 9px;border-radius:20px;}
@@ -90,6 +94,25 @@
   .tag-Resfriado{background:rgba(91,111,214,.12);color:var(--resfriado);}
   .tag-Seco{background:rgba(184,134,46,.14);color:var(--seco);}
   .ret-badge{font-size:10px;font-weight:600;color:var(--gold-dark);background:rgba(244,180,0,.14);border-radius:5px;padding:2px 7px;}
+
+  .paginacao{
+    display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;
+    padding:14px 20px;border-top:1px solid var(--border);background:var(--surface-alt);
+  }
+  .paginacao .info-pagina{font-size:12.5px;color:var(--muted);}
+  .paginacao .controles{display:flex;align-items:center;gap:8px;}
+  .paginacao select{
+    background:var(--surface);border:1px solid var(--border);color:var(--text);
+    border-radius:8px;padding:6px 10px;font-size:12.5px;font-family:'Inter';
+  }
+  .paginacao button{
+    background:var(--surface);border:1px solid var(--border);color:var(--primary-dark);
+    border-radius:8px;padding:7px 14px;font-size:12.5px;font-weight:600;cursor:pointer;
+    font-family:'Inter';
+  }
+  .paginacao button:hover:not(:disabled){background:var(--surface-alt);border-color:var(--primary-light);}
+  .paginacao button:disabled{opacity:.4;cursor:not-allowed;}
+  .paginacao .numero-pagina{font-size:12.5px;color:var(--text);font-weight:600;padding:0 6px;}
 
   .empty{color:var(--muted);font-size:13.5px;padding:32px;text-align:center;}
 
@@ -185,6 +208,21 @@
       <tbody id="corpoTabela"></tbody>
     </table>
     </div>
+    <div class="paginacao">
+      <span class="info-pagina" id="infoPagina">—</span>
+      <div class="controles">
+        <label for="itensPorPagina" style="font-size:12.5px;color:var(--muted);">Por página:</label>
+        <select id="itensPorPagina">
+          <option value="25">25</option>
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+          <option value="9999">Todos</option>
+        </select>
+        <button id="btnPaginaAnterior">‹ Anterior</button>
+        <span class="numero-pagina" id="numeroPagina">1</span>
+        <button id="btnPaginaProxima">Próxima ›</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -225,6 +263,7 @@ async function carregarDados(){
     const data = await res.json();
     REGISTROS = (data.registros || []).map(r => ({ ...r, temperatura: Number(r.temperatura) }));
     popularFiltros();
+    paginaAtual = 1;
     renderTabela();
   } catch(err){
     document.getElementById('corpoTabela').innerHTML = `<tr><td colspan="13" class="empty">Erro ao carregar: ${err.message}</td></tr>`;
@@ -259,12 +298,12 @@ function atualizarCamaras(){
   if (camaras.includes(atual)) fc.value = atual;
 }
 
-document.getElementById('fUnidade').addEventListener('change', () => { atualizarArmazens(); renderTabela(); });
-document.getElementById('fArmazem').addEventListener('change', () => { atualizarCamaras(); renderTabela(); });
+document.getElementById('fUnidade').addEventListener('change', () => { atualizarArmazens(); paginaAtual = 1; renderTabela(); });
+document.getElementById('fArmazem').addEventListener('change', () => { atualizarCamaras(); paginaAtual = 1; renderTabela(); });
 ['fTurno','fCamara','fTipo','fStatus','fInicio','fFim'].forEach(id => {
-  document.getElementById(id).addEventListener('change', renderTabela);
+  document.getElementById(id).addEventListener('change', () => { paginaAtual = 1; renderTabela(); });
 });
-document.getElementById('fId').addEventListener('input', renderTabela);
+document.getElementById('fId').addEventListener('input', () => { paginaAtual = 1; renderTabela(); });
 document.getElementById('btnAtualizar').addEventListener('click', carregarDados);
 
 function registrosFiltrados(){
@@ -293,15 +332,29 @@ function registrosFiltrados(){
   }).sort((x, y) => new Date(y.dataHora) - new Date(x.dataHora));
 }
 
+let paginaAtual = 1;
+
 function renderTabela(){
   const regs = registrosFiltrados();
   const corpo = document.getElementById('corpoTabela');
+
   if (!regs.length){
     corpo.innerHTML = '<tr><td colspan="13" class="empty">Nenhum registro encontrado.</td></tr>';
     atualizarBarraAcoes();
+    renderPaginacao(0, 0, 0);
     return;
   }
-  corpo.innerHTML = regs.map(r => {
+
+  const itensPorPagina = Number(document.getElementById('itensPorPagina').value);
+  const totalPaginas = Math.max(1, Math.ceil(regs.length / itensPorPagina));
+  if (paginaAtual > totalPaginas) paginaAtual = totalPaginas;
+  if (paginaAtual < 1) paginaAtual = 1;
+
+  const inicio = (paginaAtual - 1) * itensPorPagina;
+  const fim = Math.min(inicio + itensPorPagina, regs.length);
+  const pagina = regs.slice(inicio, fim);
+
+  corpo.innerHTML = pagina.map(r => {
     const chave = chaveRegistro(r);
     return `
       <tr class="${r.status === 'ALERTA' ? 'alerta' : ''}">
@@ -331,7 +384,32 @@ function renderTabela(){
   });
   atualizarCheckTodos();
   atualizarBarraAcoes();
+  renderPaginacao(regs.length, inicio, fim, totalPaginas);
 }
+
+function renderPaginacao(total, inicio, fim, totalPaginas){
+  const info = document.getElementById('infoPagina');
+  const numero = document.getElementById('numeroPagina');
+  const btnAnterior = document.getElementById('btnPaginaAnterior');
+  const btnProxima = document.getElementById('btnPaginaProxima');
+
+  if (!total){
+    info.textContent = 'Nenhum registro';
+    numero.textContent = '—';
+    btnAnterior.disabled = true;
+    btnProxima.disabled = true;
+    return;
+  }
+
+  info.textContent = `Mostrando ${inicio + 1}–${fim} de ${total} registro(s)`;
+  numero.textContent = `Página ${paginaAtual} de ${totalPaginas}`;
+  btnAnterior.disabled = paginaAtual <= 1;
+  btnProxima.disabled = paginaAtual >= totalPaginas;
+}
+
+document.getElementById('itensPorPagina').addEventListener('change', () => { paginaAtual = 1; renderTabela(); });
+document.getElementById('btnPaginaAnterior').addEventListener('click', () => { paginaAtual--; renderTabela(); });
+document.getElementById('btnPaginaProxima').addEventListener('click', () => { paginaAtual++; renderTabela(); });
 
 function atualizarCheckTodos(){
   const linhas = [...document.querySelectorAll('.check-linha')];
