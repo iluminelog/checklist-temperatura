@@ -49,7 +49,10 @@
   .tag-Congelado{background:rgba(73,201,232,.15);color:var(--congelado);}
   .tag-Resfriado{background:rgba(127,174,219,.15);color:var(--resfriado);}
   .tag-Seco{background:rgba(201,162,59,.18);color:var(--seco);}
-  .cam-card canvas{max-height:170px;}
+  .cam-card canvas{display:block;}
+  .chart-wrap{position:relative;height:210px;margin-top:4px;}
+  .chart-legend{display:flex;gap:14px;margin-top:8px;font-size:11px;color:var(--muted);}
+  .chart-legend .dot{display:inline-block;width:9px;height:2px;margin-right:5px;vertical-align:middle;}
   .cam-card .stats{display:flex;gap:16px;margin-top:10px;font-family:'IBM Plex Mono';font-size:12px;color:var(--muted);}
   .cam-card .stats b{color:var(--text);}
 
@@ -98,9 +101,9 @@
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyHnZuExXmoXssYJagCXouzmPzUGwFp4v4d0NMzGbyDcm42rRoMxqx5iDBo4Q-K1j0/exec';
 
 const REGRAS_TIPO = {
-  'Congelado': { texto: '≤ -12°C' },
-  'Resfriado': { texto: '4°C a 8°C' },
-  'Seco':      { texto: '≤ 15°C' }
+  'Congelado': { min: null, max: -12, texto: '≤ -12°C' },
+  'Resfriado': { min: 4, max: 8, texto: '4°C a 8°C' },
+  'Seco':      { min: null, max: 15, texto: '≤ 15°C' }
 };
 const COR_TIPO = { 'Congelado': '#49C9E8', 'Resfriado': '#7FAEDB', 'Seco': '#C9A23B' };
 
@@ -179,7 +182,7 @@ function renderKpis(regs){
 
 function renderCamaras(regs){
   const grid = document.getElementById('camGrid');
-  const chaves = [...new Set(regs.map(r => r.unidade + '|' + r.armazem + '|' + r.camara + '|' + r.tipo))];
+  const chaves = [...new Set(regs.map(r => r.unidade + '|' + r.armazem + '|' + r.camara + '|' + r.tipo))].sort();
   Object.values(charts).forEach(c => c.destroy());
   charts = {};
 
@@ -196,38 +199,83 @@ function renderCamaras(regs){
           <h3>Câmara ${camara}</h3>
           <span class="tipo-tag tag-${tipo}">${tipo}</span>
         </div>
-        <canvas id="chart-${idx}"></canvas>
+        <div class="chart-wrap"><canvas id="chart-${idx}"></canvas></div>
+        <div class="chart-legend">
+          <span><span class="dot" style="background:${COR_TIPO[tipo] || '#49C9E8'}"></span>Leitura</span>
+          <span><span class="dot" style="background:#7E93A0;opacity:.6;"></span>Faixa ideal</span>
+        </div>
         <div class="stats" id="stats-${idx}"></div>
       </div>`;
   }).join('');
 
   chaves.forEach((chave, idx) => {
     const [unidade, armazem, camara, tipo] = chave.split('|');
-    const serie = regs.filter(r => r.unidade === unidade && r.armazem === armazem && r.camara === camara && r.tipo === tipo);
+    const serie = regs
+      .filter(r => r.unidade === unidade && r.armazem === armazem && r.camara === camara && r.tipo === tipo)
+      .sort((a, b) => new Date(a.dataHora) - new Date(b.dataHora));
+
     const labels = serie.map(r => new Date(r.dataHora).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' + new Date(r.dataHora).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
     const valores = serie.map(r => r.temperatura);
     const cores = serie.map(r => r.status === 'ALERTA' ? '#E8604C' : (COR_TIPO[tipo] || '#49C9E8'));
+    const regra = REGRAS_TIPO[tipo] || {};
+
+    const datasets = [{
+      label: 'Leitura',
+      data: valores,
+      borderColor: COR_TIPO[tipo] || '#49C9E8',
+      backgroundColor: 'transparent',
+      pointBackgroundColor: cores,
+      pointRadius: 4,
+      pointHoverRadius: 5,
+      tension: 0.25,
+      borderWidth: 2,
+      spanGaps: true
+    }];
+
+    // Linhas de referência com a faixa ideal cadastrada para o tipo de armazenagem
+    if (regra.max !== undefined && regra.max !== null){
+      datasets.push({
+        label: 'Limite máx. ideal',
+        data: labels.map(() => regra.max),
+        borderColor: '#7E93A0',
+        borderDash: [4, 4],
+        borderWidth: 1.3,
+        pointRadius: 0,
+        fill: false
+      });
+    }
+    if (regra.min !== undefined && regra.min !== null){
+      datasets.push({
+        label: 'Limite mín. ideal',
+        data: labels.map(() => regra.min),
+        borderColor: '#7E93A0',
+        borderDash: [4, 4],
+        borderWidth: 1.3,
+        pointRadius: 0,
+        fill: false
+      });
+    }
 
     const ctx = document.getElementById(`chart-${idx}`);
     charts[chave] = new Chart(ctx, {
       type: 'line',
-      data: {
-        labels,
-        datasets: [{
-          data: valores,
-          borderColor: COR_TIPO[tipo] || '#49C9E8',
-          backgroundColor: 'transparent',
-          pointBackgroundColor: cores,
-          pointRadius: 4,
-          tension: 0.25,
-          borderWidth: 2
-        }]
-      },
+      data: { labels, datasets },
       options: {
         responsive: true,
-        plugins: { legend: { display: false } },
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (item) => item.dataset.label === 'Leitura'
+                ? `Leitura: ${item.parsed.y}°C`
+                : `${item.dataset.label}: ${item.parsed.y}°C`
+            }
+          }
+        },
         scales: {
-          x: { ticks: { color: '#7E93A0', font: { size: 10 } }, grid: { color: '#1B2833' } },
+          x: { ticks: { color: '#7E93A0', font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 6 }, grid: { color: '#1B2833' } },
           y: { ticks: { color: '#7E93A0', font: { size: 10 } }, grid: { color: '#1B2833' } }
         }
       }
