@@ -107,6 +107,12 @@
   .btn-gerar-pdf{background:var(--primary);color:#fff;padding:11px 22px;box-shadow:var(--shadow-sm);}
   .btn-gerar-pdf:hover{filter:brightness(1.08);}
   .btn-gerar-pdf:disabled{opacity:.45;cursor:not-allowed;filter:none;}
+  .btn-gerar-html{
+    background:var(--surface);color:var(--primary-dark);border:1.5px solid var(--primary);
+    padding:10px 20px;box-shadow:var(--shadow-sm);
+  }
+  .btn-gerar-html:hover{background:var(--surface-alt);}
+  .btn-gerar-html:disabled{opacity:.45;cursor:not-allowed;}
   .btn-limpar-selecao{
     background:none;border:1px solid var(--border);color:var(--muted);padding:11px 16px;
   }
@@ -135,6 +141,7 @@
     <div class="filters">
       <select id="fUnidade"></select>
       <select id="fArmazem"></select>
+      <select id="fCamara"></select>
       <select id="fTipo">
         <option value="">Todos os tipos</option>
         <option value="Congelado">Congelado</option>
@@ -182,6 +189,7 @@
 <div class="barra-acoes" id="barraAcoes">
   <span><b id="qtdSelecionados">0</b> selecionado(s)</span>
   <button class="btn-gerar-pdf" id="btnGerarPdf" disabled>Gerar PDF dos selecionados</button>
+  <button class="btn-gerar-html" id="btnGerarHtml" disabled>Imprimir (HTML A4)</button>
   <button class="btn-limpar-selecao" id="btnLimparSelecao">Limpar seleção</button>
 </div>
 
@@ -229,10 +237,21 @@ function atualizarArmazens(){
   const atual = fa.value;
   fa.innerHTML = '<option value="">Todos armazéns</option>' + armazens.map(a => `<option value="${a}">Armazém ${a}</option>`).join('');
   if (armazens.includes(atual)) fa.value = atual;
+  atualizarCamaras();
+}
+function atualizarCamaras(){
+  const u = document.getElementById('fUnidade').value;
+  const a = document.getElementById('fArmazem').value;
+  const camaras = [...new Set(REGISTROS.filter(r => (!u || r.unidade === u) && (!a || r.armazem === a)).map(r => r.camara))];
+  const fc = document.getElementById('fCamara');
+  const atual = fc.value;
+  fc.innerHTML = '<option value="">Todas câmaras</option>' + camaras.map(c => `<option value="${c}">Câmara ${c}</option>`).join('');
+  if (camaras.includes(atual)) fc.value = atual;
 }
 
 document.getElementById('fUnidade').addEventListener('change', () => { atualizarArmazens(); renderTabela(); });
-['fArmazem','fTipo','fStatus','fInicio','fFim'].forEach(id => {
+document.getElementById('fArmazem').addEventListener('change', () => { atualizarCamaras(); renderTabela(); });
+['fCamara','fTipo','fStatus','fInicio','fFim'].forEach(id => {
   document.getElementById(id).addEventListener('change', renderTabela);
 });
 document.getElementById('fId').addEventListener('input', renderTabela);
@@ -241,6 +260,7 @@ document.getElementById('btnAtualizar').addEventListener('click', carregarDados)
 function registrosFiltrados(){
   const u = document.getElementById('fUnidade').value;
   const a = document.getElementById('fArmazem').value;
+  const c = document.getElementById('fCamara').value;
   const tipo = document.getElementById('fTipo').value;
   const status = document.getElementById('fStatus').value;
   const idBusca = document.getElementById('fId').value.trim().toLowerCase();
@@ -251,6 +271,7 @@ function registrosFiltrados(){
     const d = new Date(r.dataHora);
     if (u && r.unidade !== u) return false;
     if (a && r.armazem !== a) return false;
+    if (c && r.camara !== c) return false;
     if (tipo && r.tipo !== tipo) return false;
     if (status && r.status !== status) return false;
     if (idBusca && !r.idRegistro.toLowerCase().includes(idBusca)) return false;
@@ -322,6 +343,7 @@ function atualizarBarraAcoes(){
   document.getElementById('qtdSelecionados').textContent = qtd;
   document.getElementById('barraAcoes').classList.toggle('show', qtd > 0);
   document.getElementById('btnGerarPdf').disabled = qtd === 0;
+  document.getElementById('btnGerarHtml').disabled = qtd === 0;
 }
 
 document.getElementById('btnLimparSelecao').addEventListener('click', () => {
@@ -460,6 +482,133 @@ document.getElementById('btnGerarPdf').addEventListener('click', async () => {
 
   btn.disabled = false; btn.textContent = 'Gerar PDF dos selecionados';
 });
+
+/* ---------- Exportar para impressão em HTML (A4 retrato) - alternativa mais leve ao PDF ---------- */
+function montarPaginaImpressao(registro, fotosDataUrl){
+  const agora = new Date(registro.dataHora);
+  const linhas = [
+    ['ID do Registro', registro.idRegistro],
+    ['Data/Hora', agora.toLocaleString('pt-BR')],
+    ['Unidade', registro.unidade || '-'],
+    ['Armazém', String(registro.armazem)],
+    ['Câmara', String(registro.camara)],
+    ['Tipo', registro.tipo],
+    ['Temp Padrão', REGRAS_TIPO[registro.tipo] || '-'],
+    ['Temperatura', registro.temperatura + '°C'],
+    ['Status', registro.status === 'OK' ? 'Dentro da faixa' : 'Fora da faixa (ALERTA)'],
+    ['Dispositivo', registro.dispositivoNome || '-']
+  ];
+  if (registro.idRetificacaoDe){
+    linhas.push(['Retificação do registro', registro.idRetificacaoDe.split('|')[0]]);
+  }
+
+  const linhasHtml = linhas.map(([label, valor]) => `
+    <div class="campo"><span class="rotulo">${label}</span><span class="valor">${valor}</span></div>
+  `).join('');
+
+  const fotosHtml = (fotosDataUrl && fotosDataUrl.length)
+    ? `<div class="secao-fotos">
+         <h3>Fotos do painel / termômetro</h3>
+         <div class="grade-fotos">${fotosDataUrl.map(du => `<img src="${du}">`).join('')}</div>
+       </div>`
+    : '';
+
+  return `
+    <section class="pagina">
+      <header class="cabecalho-impressao">
+        <img class="logo-impressao" src="${LOGO_TRANSZILLI_BASE64}" alt="Transzilli">
+        <div>
+          <h1>Check List de Temperatura</h1>
+          <div class="subtitulo">Câmaras Frias · Transzilli</div>
+        </div>
+      </header>
+      <div class="campos">${linhasHtml}</div>
+      ${fotosHtml}
+    </section>`;
+}
+
+async function gerarImpressaoHtml(){
+  const btn = document.getElementById('btnGerarHtml');
+  btn.disabled = true; btn.textContent = 'Preparando...';
+
+  const chaves = [...selecionados];
+  const escolhidos = REGISTROS.filter(r => chaves.includes(chaveRegistro(r)))
+    .sort((a, b) => new Date(a.dataHora) - new Date(b.dataHora));
+
+  const paginasHtml = [];
+  for (let i = 0; i < escolhidos.length; i++){
+    const registro = escolhidos[i];
+    btn.textContent = `Preparando... (${i + 1}/${escolhidos.length})`;
+    let fotosDataUrl = [];
+    if (registro.fotos && registro.fotos.length){
+      fotosDataUrl = (await Promise.all(registro.fotos.map(carregarFotoBase64))).filter(Boolean);
+    }
+    paginasHtml.push(montarPaginaImpressao(registro, fotosDataUrl));
+  }
+
+  const documentoHtml = `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Check List de Temperatura - Impressão</title>
+<style>
+  @page { size: A4 portrait; margin: 15mm; }
+  *{box-sizing:border-box;}
+  body{ margin:0; font-family:'Inter',Arial,sans-serif; color:#1B2422; background:#F1F5F2; }
+  .barra-impressao{
+    position:sticky; top:0; background:#00703C; color:#fff; padding:12px 20px;
+    display:flex; align-items:center; justify-content:space-between; z-index:10;
+  }
+  .barra-impressao button{
+    background:#F4B400; color:#3A2E00; border:none; border-radius:8px; padding:9px 18px;
+    font-weight:700; font-size:13.5px; cursor:pointer;
+  }
+  .pagina{
+    background:#fff; max-width:190mm; margin:14px auto; padding:14mm;
+    box-shadow:0 1px 4px rgba(0,0,0,.12); page-break-after:always;
+  }
+  .pagina:last-child{page-break-after:auto;}
+  .cabecalho-impressao{display:flex;align-items:center;gap:14px;border-bottom:2px solid #00703C;padding-bottom:12px;margin-bottom:16px;}
+  .logo-impressao{height:38px;background:#015426;border-radius:8px;padding:6px 9px;}
+  .cabecalho-impressao h1{font-size:19px;margin:0;color:#015426;}
+  .cabecalho-impressao .subtitulo{font-size:11px;color:#6B7680;text-transform:uppercase;letter-spacing:.05em;margin-top:2px;}
+  .campos{display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;margin-bottom:18px;}
+  .campo{display:flex;justify-content:space-between;border-bottom:1px solid #E3E7E9;padding:6px 0;font-size:12.5px;}
+  .campo .rotulo{color:#6B7680;font-weight:600;}
+  .campo .valor{color:#1B2422;font-weight:500;text-align:right;}
+  .secao-fotos h3{font-size:13px;color:#015426;margin:0 0 10px;}
+  .grade-fotos{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .grade-fotos img{width:100%;border-radius:6px;border:1px solid #E3E7E9;}
+  @media print{
+    body{ background:#fff; }
+    .barra-impressao{ display:none; }
+    .pagina{ box-shadow:none; margin:0; max-width:none; }
+  }
+</style>
+</head>
+<body>
+  <div class="barra-impressao">
+    <span>${escolhidos.length} check list(s) prontos para impressão (A4 retrato)</span>
+    <button onclick="window.print()">Imprimir / Salvar como PDF</button>
+  </div>
+  ${paginasHtml.join('')}
+</body>
+</html>`;
+
+  const janela = window.open('', '_blank');
+  if (!janela){
+    alert('O navegador bloqueou a abertura da janela de impressão. Permita pop-ups para este site e tente novamente.');
+  } else {
+    janela.document.open();
+    janela.document.write(documentoHtml);
+    janela.document.close();
+  }
+
+  btn.disabled = false; btn.textContent = 'Imprimir (HTML A4)';
+}
+document.getElementById('btnGerarHtml').addEventListener('click', gerarImpressaoHtml);
+
 
 function dataLocalYyyyMmDd(d){
   const ano = d.getFullYear();
