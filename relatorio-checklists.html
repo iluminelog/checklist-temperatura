@@ -136,6 +136,12 @@
     </div>
     <div class="filters">
       <select id="fUnidade"></select>
+      <select id="fTurno">
+        <option value="">Todos os turnos</option>
+        <option value="1º Turno">1º Turno (06:00-14:00)</option>
+        <option value="2º Turno">2º Turno (14:01-22:00)</option>
+        <option value="3º Turno">3º Turno (22:01-05:59)</option>
+      </select>
       <select id="fArmazem"></select>
       <select id="fCamara"></select>
       <select id="fTipo">
@@ -172,7 +178,7 @@
       <thead>
         <tr>
           <th><input type="checkbox" id="checkTodos"></th>
-          <th>ID</th><th>Data/Hora</th><th>Unidade</th><th>Arm</th><th>Cam</th>
+          <th>ID</th><th>Data/Hora</th><th>Turno</th><th>Unidade</th><th>Arm</th><th>Cam</th>
           <th>Tipo</th><th>Temp Padrão</th><th>Temp.</th><th>Status</th><th>Dispositivo</th><th></th>
         </tr>
       </thead>
@@ -198,13 +204,22 @@ const REGRAS_TIPO = {
   'Seco':      '≤ 15°C'
 };
 
+/** 1º Turno: 06:00-14:00 | 2º Turno: 14:01-22:00 | 3º Turno: 22:01-05:59 */
+function calcularTurno(dataHoraIso){
+  const d = new Date(dataHoraIso);
+  const minutos = d.getHours() * 60 + d.getMinutes();
+  if (minutos >= 360 && minutos <= 840) return '1º Turno';
+  if (minutos >= 841 && minutos <= 1320) return '2º Turno';
+  return '3º Turno';
+}
+
 let REGISTROS = [];
 let selecionados = new Set(); // idRegistro + '|' + dispositivoPin, pra evitar ambiguidade
 
 function chaveRegistro(r){ return r.idRegistro + '|' + r.dispositivoPin; }
 
 async function carregarDados(){
-  document.getElementById('corpoTabela').innerHTML = '<tr><td colspan="12" class="empty">Carregando...</td></tr>';
+  document.getElementById('corpoTabela').innerHTML = '<tr><td colspan="13" class="empty">Carregando...</td></tr>';
   try{
     const res = await fetch(APPS_SCRIPT_URL + '?action=dados');
     const data = await res.json();
@@ -212,7 +227,7 @@ async function carregarDados(){
     popularFiltros();
     renderTabela();
   } catch(err){
-    document.getElementById('corpoTabela').innerHTML = `<tr><td colspan="12" class="empty">Erro ao carregar: ${err.message}</td></tr>`;
+    document.getElementById('corpoTabela').innerHTML = `<tr><td colspan="13" class="empty">Erro ao carregar: ${err.message}</td></tr>`;
   }
 }
 
@@ -246,7 +261,7 @@ function atualizarCamaras(){
 
 document.getElementById('fUnidade').addEventListener('change', () => { atualizarArmazens(); renderTabela(); });
 document.getElementById('fArmazem').addEventListener('change', () => { atualizarCamaras(); renderTabela(); });
-['fCamara','fTipo','fStatus','fInicio','fFim'].forEach(id => {
+['fTurno','fCamara','fTipo','fStatus','fInicio','fFim'].forEach(id => {
   document.getElementById(id).addEventListener('change', renderTabela);
 });
 document.getElementById('fId').addEventListener('input', renderTabela);
@@ -254,6 +269,7 @@ document.getElementById('btnAtualizar').addEventListener('click', carregarDados)
 
 function registrosFiltrados(){
   const u = document.getElementById('fUnidade').value;
+  const turno = document.getElementById('fTurno').value;
   const a = document.getElementById('fArmazem').value;
   const c = document.getElementById('fCamara').value;
   const tipo = document.getElementById('fTipo').value;
@@ -265,6 +281,7 @@ function registrosFiltrados(){
   return REGISTROS.filter(r => {
     const d = new Date(r.dataHora);
     if (u && r.unidade !== u) return false;
+    if (turno && calcularTurno(r.dataHora) !== turno) return false;
     if (a && r.armazem !== a) return false;
     if (c && r.camara !== c) return false;
     if (tipo && r.tipo !== tipo) return false;
@@ -280,7 +297,7 @@ function renderTabela(){
   const regs = registrosFiltrados();
   const corpo = document.getElementById('corpoTabela');
   if (!regs.length){
-    corpo.innerHTML = '<tr><td colspan="12" class="empty">Nenhum registro encontrado.</td></tr>';
+    corpo.innerHTML = '<tr><td colspan="13" class="empty">Nenhum registro encontrado.</td></tr>';
     atualizarBarraAcoes();
     return;
   }
@@ -291,6 +308,7 @@ function renderTabela(){
         <td><input type="checkbox" class="check-linha" data-chave="${chave}" ${selecionados.has(chave) ? 'checked' : ''}></td>
         <td>${r.idRegistro}</td>
         <td>${new Date(r.dataHora).toLocaleString('pt-BR')}</td>
+        <td>${calcularTurno(r.dataHora)}</td>
         <td>${r.unidade || '-'}</td>
         <td>${r.armazem}</td>
         <td>${r.camara}</td>
@@ -356,6 +374,7 @@ function exportarXlsx(){
   const linhas = regs.map(r => ({
     'ID': r.idRegistro,
     'Data/Hora': new Date(r.dataHora).toLocaleString('pt-BR'),
+    'Turno': calcularTurno(r.dataHora),
     'Unidade': r.unidade || '-',
     'Armazém': r.armazem,
     'Câmara': r.camara,
@@ -369,7 +388,7 @@ function exportarXlsx(){
 
   const ws = XLSX.utils.json_to_sheet(linhas);
   ws['!cols'] = [
-    { wch: 14 }, { wch: 20 }, { wch: 28 }, { wch: 8 }, { wch: 8 },
+    { wch: 14 }, { wch: 20 }, { wch: 10 }, { wch: 28 }, { wch: 8 }, { wch: 8 },
     { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 10 }, { wch: 22 }, { wch: 12 }
   ];
 
@@ -403,6 +422,7 @@ function montarPaginaImpressao(registro, fotosDataUrl){
   const linhas = [
     ['ID do Registro', registro.idRegistro],
     ['Data/Hora', agora.toLocaleString('pt-BR')],
+    ['Turno', calcularTurno(registro.dataHora)],
     ['Unidade', registro.unidade || '-'],
     ['Armazém', String(registro.armazem)],
     ['Câmara', String(registro.camara)],
