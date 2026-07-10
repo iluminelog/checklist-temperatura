@@ -169,6 +169,13 @@ function corTipo(tipo){ return corVar(CORES_TIPO_CSS[tipo] || '--congelado'); }
 let REGISTROS = [];
 let charts = {};
 
+function dataLocalYyyyMmDd(d){
+  const ano = d.getFullYear();
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+  return `${ano}-${mes}-${dia}`;
+}
+
 async function carregarDados(){
   if (APPS_SCRIPT_URL.indexOf('COLE_AQUI') !== -1){
     document.getElementById('camGrid').innerHTML =
@@ -179,14 +186,28 @@ async function carregarDados(){
   const data = await res.json();
   REGISTROS = (data.registros || []).map(r => ({ ...r, temperatura: Number(r.temperatura) }));
   popularFiltros();
+  inicializarDatasMesAtual();
   renderTudo();
+}
+
+/** Preenche Data Inicial/Final com o mês corrente, só na primeira carga (não sobrescreve escolha do usuário). */
+function inicializarDatasMesAtual(){
+  const fInicio = document.getElementById('fInicio');
+  const fFim = document.getElementById('fFim');
+  if (fInicio.dataset.init) return;
+  const hoje = new Date();
+  const primeiroDia = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  const ultimoDia = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+  fInicio.value = dataLocalYyyyMmDd(primeiroDia);
+  fFim.value = dataLocalYyyyMmDd(ultimoDia);
+  fInicio.dataset.init = '1';
 }
 
 function popularFiltros(){
   const unidades = [...new Set(REGISTROS.map(r => r.unidade))];
   const fu = document.getElementById('fUnidade');
   if (!fu.dataset.init){
-    fu.innerHTML = '<option value="">Todas unidades</option>' + unidades.map(u => `<option value="${u}">${u}</option>`).join('');
+    fu.innerHTML = '<option value="">Selecione a unidade</option>' + unidades.map(u => `<option value="${u}">${u}</option>`).join('');
     fu.dataset.init = '1';
   }
   atualizarArmazens();
@@ -195,7 +216,7 @@ function atualizarArmazens(){
   const u = document.getElementById('fUnidade').value;
   const armazens = [...new Set(REGISTROS.filter(r => !u || r.unidade === u).map(r => r.armazem))];
   const fa = document.getElementById('fArmazem');
-  fa.innerHTML = '<option value="">Todos armazéns</option>' + armazens.map(a => `<option value="${a}">Armazém ${a}</option>`).join('');
+  fa.innerHTML = '<option value="">Selecione o armazém</option>' + armazens.map(a => `<option value="${a}">Armazém ${a}</option>`).join('');
 }
 document.getElementById('fUnidade').addEventListener('change', () => { atualizarArmazens(); renderTudo(); });
 document.getElementById('fArmazem').addEventListener('change', renderTudo);
@@ -218,7 +239,29 @@ function registrosFiltrados(){
   }).sort((x, y) => new Date(x.dataHora) - new Date(y.dataHora));
 }
 
+function unidadeEArmazemSelecionados(){
+  const u = document.getElementById('fUnidade').value;
+  const a = document.getElementById('fArmazem').value;
+  return Boolean(u) && Boolean(a);
+}
+
+function mostrarAvisoSelecao(){
+  Object.values(charts).forEach(c => c.destroy());
+  charts = {};
+  document.getElementById('kpis').innerHTML = '';
+  document.getElementById('camGrid').innerHTML =
+    '<div class="empty">Selecione a <b>Unidade</b> e o <b>Armazém</b> acima para visualizar os indicadores.</div>';
+  document.getElementById('alertTableWrap').innerHTML = '';
+  document.getElementById('tableWrap').innerHTML = '';
+  document.getElementById('btnExportarTela').disabled = true;
+}
+
 function renderTudo(){
+  if (!unidadeEArmazemSelecionados()){
+    mostrarAvisoSelecao();
+    return;
+  }
+  document.getElementById('btnExportarTela').disabled = false;
   const regs = registrosFiltrados();
   renderKpis(regs);
   renderCamaras(regs);
@@ -239,9 +282,24 @@ function renderKpis(regs){
   `;
 }
 
+/** Câmaras numéricas em ordem crescente (1, 2, 3...); nomes não numéricos (ex: Antecâmara) vão para o final. */
+function compararChavesPorCamara(chaveA, chaveB){
+  const camA = chaveA.split('|')[2].trim();
+  const camB = chaveB.split('|')[2].trim();
+  const numA = Number(camA);
+  const numB = Number(camB);
+  const aEhNumero = camA !== '' && !isNaN(numA);
+  const bEhNumero = camB !== '' && !isNaN(numB);
+  if (aEhNumero && bEhNumero) return numA - numB;
+  if (aEhNumero && !bEhNumero) return -1;
+  if (!aEhNumero && bEhNumero) return 1;
+  return camA.localeCompare(camB, 'pt-BR');
+}
+
 function renderCamaras(regs){
   const grid = document.getElementById('camGrid');
-  const chaves = [...new Set(regs.map(r => r.unidade + '|' + r.armazem + '|' + r.camara + '|' + r.tipo))].sort();
+  const chaves = [...new Set(regs.map(r => r.unidade + '|' + r.armazem + '|' + r.camara + '|' + r.tipo))]
+    .sort(compararChavesPorCamara);
   Object.values(charts).forEach(c => c.destroy());
   charts = {};
 
@@ -412,12 +470,18 @@ carregarDados();
 
 /* ---------- Exportar tela atual para HTML (snapshot estático) ---------- */
 function exportarTelaHtml(){
+  if (!unidadeEArmazemSelecionados()){
+    alert('Selecione a Unidade e o Armazém antes de exportar.');
+    return;
+  }
   const tema = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+  const unidadeSelecionada = document.getElementById('fUnidade').value;
+  const armazemSelecionado = document.getElementById('fArmazem').value;
   const kpisHtml = document.getElementById('kpis').innerHTML;
   const alertHtml = document.getElementById('alertTableWrap').innerHTML;
   const tabelaHtml = document.getElementById('tableWrap').innerHTML;
 
-  const camarasHtml = Object.keys(charts).map(chave => {
+  const camarasHtml = Object.keys(charts).sort(compararChavesPorCamara).map(chave => {
     const [unidade, armazem, camara, tipo] = chave.split('|');
     const imgSrc = charts[chave].toBase64Image();
     return `
@@ -445,7 +509,7 @@ function exportarTelaHtml(){
       <div class="logo-plaque"><img src="${LOGO_TRANSZILLI_BASE64}" style="height:32px;display:block;"></div>
       <div>
         <h1>Indicadores de Temperatura</h1>
-        <div class="sub">Câmaras Frias · Transzilli</div>
+        <div class="sub">${unidadeSelecionada} · Armazém ${armazemSelecionado}</div>
       </div>
     </div>
   </header>
