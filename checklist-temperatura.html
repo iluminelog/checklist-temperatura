@@ -109,6 +109,7 @@
   .tag-congelado{background:rgba(73,201,232,.15);color:var(--congelado);}
   .tag-resfriado{background:rgba(127,174,219,.15);color:var(--resfriado);}
   .tag-seco{background:rgba(201,162,59,.18);color:var(--seco);}
+  .tag-antecamara{background:rgba(185,139,214,.18);color:#B98BD6;}
 
   .gauge-row{display:flex;align-items:center;gap:16px;margin-top:14px;}
   .gauge{
@@ -127,6 +128,9 @@
     padding:6px 12px;border-radius:20px;display:inline-block;
   }
   .status-ok{background:rgba(79,206,138,.15);color:var(--ok);}
+  .status-normal{background:rgba(244,180,0,.16);color:#F4B400;}
+  .status-medio{background:rgba(249,115,22,.16);color:#F97316;}
+  .status-critico{background:rgba(232,96,76,.16);color:var(--alerta);}
   .status-alerta{background:rgba(232,96,76,.16);color:var(--alerta);}
   .status-neutro{background:var(--panel-alt);color:var(--muted);}
   .status-sub{font-size:11.5px;color:var(--muted);margin-top:5px;}
@@ -420,16 +424,50 @@ const CONFIG_FALLBACK = [
   { unidade: 'Aparecida de Goiânia GO (Zilog)', armazem: '1', camara: '2', tipo: 'Congelado' },
   { unidade: 'Aparecida de Goiânia GO (Zilog)', armazem: '1', camara: '3', tipo: 'Resfriado' },
   { unidade: 'Aparecida de Goiânia GO (Zilog)', armazem: '1', camara: '4', tipo: 'Resfriado' },
-  { unidade: 'Aparecida de Goiânia GO (Zilog)', armazem: '1', camara: 'Antecâmara', tipo: 'Resfriado' }
+  { unidade: 'Aparecida de Goiânia GO (Zilog)', armazem: '1', camara: 'Antecâmara', tipo: 'Antecamara' }
 ];
 
-const REGRAS_TIPO = {
-  'Congelado': { min: null, max: -12, regra: 'max', texto: '-12°C ou mais frio' },
-  'Resfriado': { min: 4, max: 8, regra: 'faixa', texto: 'entre 4°C e 8°C' },
-  'Seco':      { min: null, max: 15, regra: 'max', texto: '15°C ou mais frio' }
+// Faixas de desvio (Normal/Médio/Crítico) por tipo, carregadas do servidor (aba FaixasDesvio).
+// Fica vazio até a config carregar; FAIXAS_FALLBACK cobre o modo offline.
+let FAIXAS = {};
+const FAIXAS_FALLBACK = {
+  'Congelado': { normal: { min: null, max: -17 }, medio: { min: null, max: -14 }, critico: { min: null, max: -12 } },
+  'Resfriado': { normal: { min: 1, max: 4 }, medio: { min: 1, max: 5 }, critico: { min: 0, max: 6 } },
+  'Antecamara': { normal: { min: null, max: 8 }, medio: { min: 4, max: 10 }, critico: { min: 2, max: 12 } },
+  'Seco': { normal: { min: null, max: 15 }, medio: { min: null, max: null }, critico: { min: null, max: null } }
 };
-const TAG_CLASS = { 'Congelado': 'tag-congelado', 'Resfriado': 'tag-resfriado', 'Seco': 'tag-seco' };
-const RING_COLOR = { 'Congelado': '#49C9E8', 'Resfriado': '#7FAEDB', 'Seco': '#C9A23B' };
+
+const TAG_CLASS = { 'Congelado': 'tag-congelado', 'Resfriado': 'tag-resfriado', 'Seco': 'tag-seco', 'Antecamara': 'tag-antecamara' };
+const RING_COLOR = { 'Congelado': '#49C9E8', 'Resfriado': '#7FAEDB', 'Seco': '#C9A23B', 'Antecamara': '#B98BD6' };
+
+// Rótulos e cores dos 4 níveis de status, usados em todo o app.
+const STATUS_INFO = {
+  'OK':             { texto: 'Dentro da faixa',   classe: 'status-ok',      cor: '#4FCE8A' },
+  'DESVIO_NORMAL':  { texto: 'Desvio Normal',      classe: 'status-normal',  cor: '#F4B400' },
+  'DESVIO_MEDIO':   { texto: 'Desvio Médio',       classe: 'status-medio',   cor: '#F97316' },
+  'DESVIO_CRITICO': { texto: 'Desvio Crítico',     classe: 'status-critico', cor: '#E8604C' }
+};
+function textoStatus(status){ return (STATUS_INFO[status] || { texto: status || '—' }).texto; }
+function corStatus(status){ return (STATUS_INFO[status] || { cor: '#7E93A0' }).cor; }
+function classeStatus(status){ return (STATUS_INFO[status] || { classe: 'status-neutro' }).classe; }
+
+function faixaTextoResumo(tipo){
+  const f = FAIXAS[tipo] || FAIXAS_FALLBACK[tipo];
+  if (!f || !f.normal) return '—';
+  const { min, max } = f.normal;
+  if (min !== null && max !== null) return `entre ${min}°C e ${max}°C`;
+  if (max !== null) return `até ${max}°C`;
+  if (min !== null) return `${min}°C ou mais quente`;
+  return '—';
+}
+
+/** Um "tier" é violado se a temperatura ficar abaixo do min (quando definido) ou acima do max (quando definido). */
+function violaFaixa(tier, t){
+  if (!tier) return false;
+  if (tier.min !== null && tier.min !== undefined && t < tier.min) return true;
+  if (tier.max !== null && tier.max !== undefined && t > tier.max) return true;
+  return false;
+}
 
 let CONFIG = [];
 let fotos = []; // { base64, mimeType, dataUrl }
@@ -559,10 +597,15 @@ async function carregarConfig(){
       if (pin && senha) url += '&pin=' + encodeURIComponent(pin) + '&senha=' + encodeURIComponent(senha) + '&uuid=' + encodeURIComponent(uuid);
       const res = await fetch(url);
       const data = await res.json();
-      if (data.ok && data.config && data.config.length) { CONFIG = data.config; return; }
+      if (data.ok && data.config && data.config.length) {
+        CONFIG = data.config;
+        FAIXAS = data.faixas || {};
+        return;
+      }
     }
   }catch(e){ /* segue para fallback */ }
   CONFIG = CONFIG_FALLBACK;
+  FAIXAS = FAIXAS_FALLBACK;
 }
 
 function unidades(){ return [...new Set(CONFIG.map(c => c.unidade))]; }
@@ -603,7 +646,7 @@ function atualizarFaixa(){
   const tag = document.getElementById('tipoTag');
   tag.textContent = tipo;
   tag.className = 'tipo-tag ' + (TAG_CLASS[tipo] || '');
-  document.getElementById('faixaTexto').textContent = 'Ideal: ' + (REGRAS_TIPO[tipo] ? REGRAS_TIPO[tipo].texto : '—');
+  document.getElementById('faixaTexto').textContent = 'Ideal: ' + faixaTextoResumo(tipo);
   avaliarTemperatura();
 }
 
@@ -613,10 +656,12 @@ document.getElementById('camara').addEventListener('change', atualizarFaixa);
 
 /* ---------- Avaliação da temperatura (gauge + status) ---------- */
 function avaliarStatus(tipo, temp){
-  const r = REGRAS_TIPO[tipo];
-  if (!r || temp === null || isNaN(temp)) return null;
-  if (r.regra === 'max') return temp <= r.max ? 'OK' : 'ALERTA';
-  return (temp >= r.min && temp <= r.max) ? 'OK' : 'ALERTA';
+  const f = FAIXAS[tipo] || FAIXAS_FALLBACK[tipo];
+  if (!f || temp === null || isNaN(temp)) return null;
+  if (violaFaixa(f.critico, temp)) return 'DESVIO_CRITICO';
+  if (violaFaixa(f.medio, temp)) return 'DESVIO_MEDIO';
+  if (violaFaixa(f.normal, temp)) return 'DESVIO_NORMAL';
+  return 'OK';
 }
 function avaliarTemperatura(){
   const tipo = tipoAtual();
@@ -639,17 +684,13 @@ function avaliarTemperatura(){
   if (status === null){
     gauge.style.borderColor = RING_COLOR[tipo] || '#26363F';
     pill.className = 'status-pill status-neutro'; pill.textContent = 'Aguardando leitura';
-    sub.textContent = 'Ideal: ' + REGRAS_TIPO[tipo].texto;
+    sub.textContent = 'Ideal: ' + faixaTextoResumo(tipo);
     return;
   }
-  if (status === 'OK'){
-    gauge.style.borderColor = '#4FCE8A';
-    pill.className = 'status-pill status-ok'; pill.textContent = 'Dentro da faixa';
-  } else {
-    gauge.style.borderColor = '#E8604C';
-    pill.className = 'status-pill status-alerta'; pill.textContent = 'Fora da faixa';
-  }
-  sub.textContent = 'Ideal: ' + REGRAS_TIPO[tipo].texto;
+  gauge.style.borderColor = corStatus(status);
+  pill.className = 'status-pill ' + classeStatus(status);
+  pill.textContent = textoStatus(status);
+  sub.textContent = 'Ideal: ' + faixaTextoResumo(tipo);
 }
 document.getElementById('temperatura').addEventListener('input', avaliarTemperatura);
 
@@ -837,7 +878,7 @@ function mostrarSucesso(d){
     <div>ID: <b>${d.idRegistro}</b>${d.idRetificacaoDe ? ' <span style="color:var(--seco)">(retificação)</span>' : ''}</div>
     <div><b>${agora.toLocaleString('pt-BR')}</b></div>
     <div>Armazém ${d.armazem} · Câmara ${d.camara} (${d.tipo})</div>
-    <div>Temperatura: <b>${d.temperatura}°C</b> — ${d.status === 'OK' ? '✅ Dentro da faixa' : '⚠️ Fora da faixa'}</div>
+    <div>Temperatura: <b>${d.temperatura}°C</b> — <span style="color:${corStatus(d.status)}">${d.status === 'OK' ? '✅' : '⚠️'} ${textoStatus(d.status)}</span></div>
   `;
 }
 
@@ -912,7 +953,7 @@ async function carregarRegistrosDoDia(data){
         <thead><tr><th>ID</th><th>Hora</th><th>Arm</th><th>Cam</th></tr></thead>
         <tbody>
           ${resData.registros.map(r => `
-            <tr class="${r.status === 'ALERTA' ? 'alerta' : ''}" data-id="${r.idRegistro}" data-pin="${r.dispositivoPin}">
+            <tr class="${r.status !== 'OK' ? 'alerta' : ''}" data-id="${r.idRegistro}" data-pin="${r.dispositivoPin}">
               <td>${r.idRegistro}</td>
               <td>${new Date(r.dataHora).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})}</td>
               <td>${r.armazem}</td>
@@ -993,7 +1034,7 @@ async function exibirResultado(registro, retificavelHoje, podeRetificar, retific
     <div class="resultado-linha"><span>Local</span><span>Armazém ${registro.armazem} · Câmara ${registro.camara}</span></div>
     <div class="resultado-linha"><span>Tipo</span><span>${registro.tipo}</span></div>
     <div class="resultado-linha"><span>Temperatura</span><span>${registro.temperatura}°C</span></div>
-    <div class="resultado-linha"><span>Status</span><span>${registro.status === 'OK' ? '✅ OK' : '⚠️ ALERTA'}</span></div>
+    <div class="resultado-linha"><span>Status</span><span style="color:${corStatus(registro.status)}">${registro.status === 'OK' ? '✅' : '⚠️'} ${textoStatus(registro.status)}</span></div>
     <div class="resultado-linha"><span>Dispositivo</span><span>${registro.dispositivoNome || '—'}</span></div>
     ${registro.idRetificacaoDe ? `<div class="resultado-linha"><span>Retificação de</span><span>${registro.idRetificacaoDe.split('|')[0]}</span></div>` : ''}
   `;
@@ -1025,7 +1066,7 @@ async function exibirResultado(registro, retificavelHoje, podeRetificar, retific
       retificacoes.map(r => `
         <div class="retificacao-item">
           <b>${r.idRegistro}</b> — ${new Date(r.dataHora).toLocaleString('pt-BR')} —
-          ${r.temperatura}°C (${r.status === 'OK' ? 'OK' : 'ALERTA'})
+          ${r.temperatura}°C (${textoStatus(r.status)})
         </div>`).join('');
   } else {
     lista.innerHTML = '';
@@ -1063,7 +1104,7 @@ function gerarPDF(registro, fotosDataUrl){
     ['Câmara', String(registro.camara)],
     ['Tipo', registro.tipo],
     ['Temperatura', registro.temperatura + '°C'],
-    ['Status', registro.status === 'OK' ? 'Dentro da faixa' : 'Fora da faixa (ALERTA)'],
+    ['Status', textoStatus(registro.status)],
     ['Dispositivo', registro.dispositivoNome || '-']
   ];
   if (registro.idRetificacaoDe){
