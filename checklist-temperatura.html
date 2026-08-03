@@ -270,24 +270,24 @@
   </header>
 
   <div class="device-strip" id="deviceStrip">
-    <span>Dispositivo: <b id="deviceLabel">—</b></span>
-    <button id="btnTrocarDispositivo">trocar PIN</button>
+    <span>Usuário: <b id="deviceLabel">—</b></span>
+    <button id="btnTrocarDispositivo">Sair</button>
   </div>
 
-  <!-- AUTH SCREEN (bloqueia o formulário até validar PIN) -->
+  <!-- AUTH SCREEN (bloqueia o formulário até validar usuário/senha) -->
   <div id="authScreen" style="display:none;">
     <section class="card">
-      <p class="eyebrow">Autorização do dispositivo</p>
+      <p class="eyebrow">Login</p>
       <p style="font-size:13.5px;color:var(--muted);margin:0 0 14px;">
-        Informe o PIN e a senha cadastrados para este celular. No primeiro uso,
-        ficam vinculados permanentemente a este aparelho.
+        Informe seu usuário e senha para registrar o check list. Este celular
+        pode ser usado por várias pessoas - cada uma entra com seu próprio login.
       </p>
-      <label for="pinInput">PIN do dispositivo</label>
-      <input type="text" id="pinInput" inputmode="numeric" placeholder="Ex: 1234" autocomplete="off">
-      <label for="senhaInput">Senha numérica</label>
+      <label for="pinInput">Usuário</label>
+      <input type="text" id="pinInput" placeholder="Ex: joao.silva" autocomplete="off" autocapitalize="off">
+      <label for="senhaInput">Senha</label>
       <input type="password" id="senhaInput" inputmode="numeric" placeholder="Ex: 0000" autocomplete="off">
       <div class="msg" id="authMsg" style="display:none;"></div>
-      <button class="submit" id="btnValidarPin" style="margin-top:16px;">Validar acesso</button>
+      <button class="submit" id="btnValidarPin" style="margin-top:16px;">Entrar</button>
     </section>
   </div>
 
@@ -385,7 +385,7 @@
       <p class="eyebrow">Buscar registro por ID</p>
       <label for="buscaIdInput">ID do registro</label>
       <input type="text" id="buscaIdInput" placeholder="Ex: 10707260001" inputmode="numeric">
-      <label for="buscaPinInput">PIN do dispositivo (só se pedir para desambiguar)</label>
+      <label for="buscaPinInput">Usuário (só se pedir para desambiguar)</label>
       <input type="text" id="buscaPinInput" placeholder="Opcional" inputmode="numeric">
       <button class="submit" id="btnBuscarRegistro" style="margin-top:14px;">Buscar</button>
       <div class="msg" id="buscaMsg" style="display:none;"></div>
@@ -449,12 +449,16 @@ function getDeviceUuid(){
   }
   return uuid;
 }
-function getPin(){ return localStorage.getItem('checklist_device_pin'); }
-function setPin(pin){ localStorage.setItem('checklist_device_pin', pin); }
-function limparPin(){ localStorage.removeItem('checklist_device_pin'); }
-function getSenha(){ return localStorage.getItem('checklist_device_senha'); }
-function setSenha(senha){ localStorage.setItem('checklist_device_senha', senha); }
-function limparSenha(){ localStorage.removeItem('checklist_device_senha'); }
+/* Sessão em memória apenas - NÃO fica salva no aparelho, já que este celular
+   pode ser usado por várias pessoas diferentes ao longo do dia. */
+let sessaoUsuario = null;
+let sessaoSenha = null;
+function getPin(){ return sessaoUsuario; }
+function setPin(usuario){ sessaoUsuario = usuario; }
+function limparPin(){ sessaoUsuario = null; }
+function getSenha(){ return sessaoSenha; }
+function setSenha(senha){ sessaoSenha = senha; }
+function limparSenha(){ sessaoSenha = null; }
 
 function renderDevice(){
   document.getElementById('deviceLabel').textContent = dispositivoNome || 'não autorizado';
@@ -510,7 +514,7 @@ document.getElementById('btnValidarPin').addEventListener('click', async () => {
   const pin = document.getElementById('pinInput').value.trim();
   const senha = document.getElementById('senhaInput').value.trim();
   const btn = document.getElementById('btnValidarPin');
-  if (!pin || !senha){ mostrarTelaAuth('Informe o PIN e a senha.'); return; }
+  if (!pin || !senha){ mostrarTelaAuth('Informe o usuário e a senha.'); return; }
   btn.disabled = true; btn.textContent = 'Validando...';
   try{
     const resultado = await validarPin(pin, senha);
@@ -523,12 +527,12 @@ document.getElementById('btnValidarPin').addEventListener('click', async () => {
       renderSelects();
       mostrarTelaForm();
     } else {
-      mostrarTelaAuth(resultado.mensagem || 'PIN ou senha inválidos.');
+      mostrarTelaAuth(resultado.mensagem || 'Usuário ou senha inválidos.');
     }
   } catch(err){
     mostrarTelaAuth('Erro ao validar: ' + err.message);
   }
-  btn.disabled = false; btn.textContent = 'Validar acesso';
+  btn.disabled = false; btn.textContent = 'Entrar';
 });
 
 document.getElementById('btnTrocarDispositivo').addEventListener('click', () => {
@@ -540,28 +544,10 @@ document.getElementById('btnTrocarDispositivo').addEventListener('click', () => 
 });
 
 async function initDevice(){
-  const pinSalvo = getPin();
-  const senhaSalva = getSenha();
-  if (!pinSalvo || !senhaSalva){
-    mostrarTelaAuth();
-    return false;
-  }
-  try{
-    const resultado = await validarPin(pinSalvo, senhaSalva);
-    if (resultado.ok){
-      dispositivoNome = resultado.nomeDispositivo;
-      renderDevice();
-      mostrarTelaForm();
-      return true;
-    }
-    limparPin();
-    limparSenha();
-    mostrarTelaAuth(resultado.mensagem || 'PIN ou senha inválidos, informe novamente.');
-    return false;
-  } catch(err){
-    mostrarTelaAuth('Não foi possível validar o dispositivo. Verifique a conexão.');
-    return false;
-  }
+  // Sessão nunca fica salva entre aberturas do app (celular compartilhado por várias pessoas),
+  // então sempre pede login de novo ao carregar a página.
+  mostrarTelaAuth();
+  return false;
 }
 
 /* ---------- Carregar config (Unidade/Armazém/Câmara/Tipo) ---------- */
