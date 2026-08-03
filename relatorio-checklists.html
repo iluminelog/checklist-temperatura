@@ -211,7 +211,7 @@
         <tr>
           <th><input type="checkbox" id="checkTodos"></th>
           <th>ID</th><th>Data/Hora</th><th>Turno</th><th>Unidade</th><th>Arm</th><th>Cam</th>
-          <th>Tipo</th><th>Temp Padrão</th><th>Temp.</th><th>Status</th><th>Dispositivo</th><th></th>
+          <th>Tipo</th><th>Temp Padrão</th><th>Temp.</th><th>Status</th><th>Classificação</th><th>Dispositivo</th><th></th>
         </tr>
       </thead>
       <tbody id="corpoTabela"></tbody>
@@ -266,6 +266,8 @@ const STATUS_LABEL = { 'OK': 'OK', 'DESVIO_NORMAL': 'Desvio Normal', 'DESVIO_MED
 const STATUS_ROWCLASS = { 'OK': '', 'DESVIO_NORMAL': 'normal', 'DESVIO_MEDIO': 'medio', 'DESVIO_CRITICO': 'alerta' };
 function textoStatus(status){ return STATUS_LABEL[status] || status || '—'; }
 function classeStatus(status){ return STATUS_ROWCLASS[status] !== undefined ? STATUS_ROWCLASS[status] : 'alerta'; }
+/** Versão simplificada (2 estados) do status, para a coluna "Status" — a coluna "Classificação" traz o detalhe dos 4 níveis. */
+function statusBinario(status){ return status === 'OK' ? 'OK' : 'ALERTA'; }
 
 /** 1º Turno: 06:00-14:00 | 2º Turno: 14:01-22:00 | 3º Turno: 22:01-05:59 */
 function calcularTurno(dataHoraIso){
@@ -282,7 +284,7 @@ let selecionados = new Set(); // idRegistro + '|' + dispositivoPin, pra evitar a
 function chaveRegistro(r){ return r.idRegistro + '|' + r.dispositivoPin; }
 
 async function carregarDados(){
-  document.getElementById('corpoTabela').innerHTML = '<tr><td colspan="13" class="empty">Carregando...</td></tr>';
+  document.getElementById('corpoTabela').innerHTML = '<tr><td colspan="14" class="empty">Carregando...</td></tr>';
   try{
     const [resDados, resConfig] = await Promise.all([
       fetch(APPS_SCRIPT_URL + '?action=dados'),
@@ -296,7 +298,7 @@ async function carregarDados(){
     paginaAtual = 1;
     renderTabela();
   } catch(err){
-    document.getElementById('corpoTabela').innerHTML = `<tr><td colspan="13" class="empty">Erro ao carregar: ${err.message}</td></tr>`;
+    document.getElementById('corpoTabela').innerHTML = `<tr><td colspan="14" class="empty">Erro ao carregar: ${err.message}</td></tr>`;
   }
 }
 
@@ -369,7 +371,7 @@ function renderTabela(){
   const corpo = document.getElementById('corpoTabela');
 
   if (!regs.length){
-    corpo.innerHTML = '<tr><td colspan="13" class="empty">Nenhum registro encontrado.</td></tr>';
+    corpo.innerHTML = '<tr><td colspan="14" class="empty">Nenhum registro encontrado.</td></tr>';
     atualizarBarraAcoes();
     renderPaginacao(0, 0, 0);
     return;
@@ -398,7 +400,8 @@ function renderTabela(){
         <td><span class="tipo-tag tag-${r.tipo}">${r.tipo}</span></td>
         <td>${faixaTextoResumo(r.tipo)}</td>
         <td>${r.temperatura}°C</td>
-        <td><span class="status-dot ${classeStatus(r.status) || 'ok'}"></span>${textoStatus(r.status)}</td>
+        <td><span class="status-dot ${classeStatus(r.status) || 'ok'}"></span>${statusBinario(r.status)}</td>
+        <td>${textoStatus(r.status)}</td>
         <td>${r.dispositivoNome || '-'}</td>
         <td>${r.idRetificacaoDe ? '<span class="ret-badge">retificação</span>' : ''}</td>
       </tr>`;
@@ -489,7 +492,8 @@ function exportarXlsx(){
     'Tipo': r.tipo,
     'Temp Padrão': faixaTextoResumo(r.tipo),
     'Temperatura (°C)': r.temperatura,
-    'Status': textoStatus(r.status),
+    'Status': statusBinario(r.status),
+    'Classificação': textoStatus(r.status),
     'Dispositivo': r.dispositivoNome || '-',
     'Retificação': r.idRetificacaoDe ? 'Sim' : 'Não'
   }));
@@ -497,7 +501,7 @@ function exportarXlsx(){
   const ws = XLSX.utils.json_to_sheet(linhas);
   ws['!cols'] = [
     { wch: 14 }, { wch: 20 }, { wch: 10 }, { wch: 28 }, { wch: 8 }, { wch: 8 },
-    { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 10 }, { wch: 22 }, { wch: 12 }
+    { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 10 }, { wch: 16 }, { wch: 22 }, { wch: 12 }
   ];
 
   const wb = XLSX.utils.book_new();
@@ -537,7 +541,8 @@ function montarPaginaImpressao(registro, fotosDataUrl){
     ['Tipo', registro.tipo],
     ['Temp Padrão', faixaTextoResumo(registro.tipo)],
     ['Temperatura', registro.temperatura + '°C'],
-    ['Status', textoStatus(registro.status)],
+    ['Status', statusBinario(registro.status)],
+    ['Classificação', textoStatus(registro.status)],
     ['Dispositivo', registro.dispositivoNome || '-']
   ];
   if (registro.idRetificacaoDe){
